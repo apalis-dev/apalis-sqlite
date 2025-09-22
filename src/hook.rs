@@ -1,22 +1,21 @@
 use futures::channel::mpsc::{self, Receiver};
 use futures::{SinkExt, StreamExt};
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
+use sqlx::Executor;
 use sqlx::SqlitePool;
-use sqlx::{sqlite::SqliteConnection, Connection, Executor};
-use std::ffi::{c_void, CStr};
+use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
-use std::ptr;
 
 #[derive(Debug)]
-struct DbEvent {
-    op: &'static str,
+pub struct DbEvent {
+    pub op: &'static str,
     db_name: String,
-    table_name: String,
+    pub table_name: String,
     rowid: i64,
 }
 
 // Callback for SQLite update hook
-extern "C" fn update_hook_callback(
+pub(crate) extern "C" fn update_hook_callback(
     arg: *mut c_void,
     op: c_int,
     db_name: *const c_char,
@@ -47,11 +46,12 @@ extern "C" fn update_hook_callback(
     }
 }
 
+
 pub struct PushListener {
-    pool: SqlitePool,
-    rx: Receiver<DbEvent>,
+    pub rx: Receiver<DbEvent>,
 }
 
+#[cfg(test)]
 async fn run_it() -> Result<(), sqlx::Error> {
     let (tx, mut rx) = mpsc::channel::<DbEvent>(10);
 
@@ -91,7 +91,7 @@ async fn run_it() -> Result<(), sqlx::Error> {
     conn.execute("DELETE FROM users WHERE id = 2").await?;
 
     // Let events flush
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    // tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     Ok(())
 }
