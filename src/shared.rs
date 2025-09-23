@@ -283,15 +283,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, time::Duration};
-
-    use chrono::Local;
+    use std::time::Duration;
 
     use apalis_core::{
-        backend::{TaskSink, memory::MemoryStorage},
+        backend::TaskSink,
         error::BoxDynError,
         task::{Task, task_id::TaskId},
-        worker::{builder::WorkerBuilder, event::Event, ext::event_listener::EventListenerExt},
+        worker::builder::WorkerBuilder,
     };
 
     use crate::context::SqliteContext;

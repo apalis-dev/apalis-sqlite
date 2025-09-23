@@ -37,6 +37,10 @@ impl TaskRow {
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
             .with_last_result(self.last_error)
             .with_priority(self.priority.unwrap_or(0) as i32)
+            .with_namespace(
+                self.job_type
+                    .ok_or(sqlx::Error::ColumnNotFound("job_type".to_owned()))?,
+            )
             .with_lock_at(self.lock_at);
         let args = D::decode(&self.job).map_err(|e| sqlx::Error::Decode(e.into()))?;
         let task = TaskBuilder::new(args)

@@ -309,7 +309,7 @@ pub(crate) async fn heartbeat(
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, time::Duration};
+    use std::time::Duration;
 
     use chrono::Local;
 
@@ -378,11 +378,11 @@ mod tests {
 
             let items = stream::repeat_with(move || {
                 start += 1;
-                let task = Task::builder(serde_json::to_string(&start).unwrap())
+
+                Task::builder(serde_json::to_string(&start).unwrap())
                     .run_after(Duration::from_secs(1))
                     .with_ctx(SqliteContext::new().with_priority(start))
-                    .build();
-                task
+                    .build()
             })
             .take(ITEMS)
             .collect::<Vec<_>>()

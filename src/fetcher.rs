@@ -14,11 +14,7 @@ use apalis_core::{
     task::Task,
     worker::context::WorkerContext,
 };
-use futures::{
-    FutureExt, StreamExt,
-    future::BoxFuture,
-    stream::Stream,
-};
+use futures::{FutureExt, future::BoxFuture, stream::Stream};
 use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use ulid::Ulid;

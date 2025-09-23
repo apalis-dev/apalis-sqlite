@@ -1,5 +1,5 @@
 use apalis_core::{
-    error::BoxDynError,
+    error::{AbortError, BoxDynError},
     task::{Parts, status::Status},
     worker::ext::ack::Acknowledge,
 };
@@ -70,8 +70,9 @@ pub fn calculate_status<Res>(
 ) -> Status {
     match &res {
         Ok(_) => Status::Done,
-        Err(e) => match &e {
-            e if parts.ctx.max_attempts() as usize <= parts.attempt.current() => Status::Killed,
+        Err(e) => match e {
+            _ if parts.ctx.max_attempts() as usize <= parts.attempt.current() => Status::Killed,
+            e if e.downcast_ref::<AbortError>().is_some() => Status::Killed,
             _ => Status::Failed,
         },
     }
