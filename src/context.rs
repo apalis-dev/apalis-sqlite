@@ -19,6 +19,7 @@ pub struct SqliteContext {
     lock_by: Option<String>,
     done_at: Option<i64>,
     priority: i32,
+    namespace: Option<String>,
 }
 
 impl Default for SqliteContext {
@@ -37,12 +38,14 @@ impl SqliteContext {
             last_result: None,
             lock_by: None,
             priority: 0,
+            namespace: None,
         }
     }
 
     /// Set the number of attempts
-    pub fn set_max_attempts(&mut self, max_attempts: i32) {
+    pub fn with_max_attempts(mut self, max_attempts: i32) -> Self {
         self.max_attempts = max_attempts;
+        self
     }
 
     /// Gets the maximum attempts for a job. Default 25
@@ -56,8 +59,9 @@ impl SqliteContext {
     }
 
     /// Set the time a job was done
-    pub fn set_done_at(&mut self, done_at: Option<i64>) {
+    pub fn with_done_at(mut self, done_at: Option<i64>) -> Self {
         self.done_at = done_at;
+        self
     }
 
     /// Get the time a job was locked
@@ -66,8 +70,9 @@ impl SqliteContext {
     }
 
     /// Set the lock_at value
-    pub fn set_lock_at(&mut self, lock_at: Option<i64>) {
+    pub fn with_lock_at(mut self, lock_at: Option<i64>) -> Self {
         self.lock_at = lock_at;
+        self
     }
 
     /// Get the time a job was locked
@@ -76,8 +81,9 @@ impl SqliteContext {
     }
 
     /// Set `lock_by`
-    pub fn set_lock_by(&mut self, lock_by: Option<String>) {
+    pub fn with_lock_by(mut self, lock_by: Option<String>) -> Self {
         self.lock_by = lock_by;
+        self
     }
 
     /// Get the time a job was locked
@@ -86,18 +92,29 @@ impl SqliteContext {
     }
 
     /// Set the last result
-    pub fn set_last_result(&mut self, result: Option<String>) {
+    pub fn with_last_result(mut self, result: Option<String>) -> Self {
         self.last_result = result;
+        self
     }
 
     /// Set the job priority. Larger values will run sooner. Default is 0.
-    pub fn set_priority(&mut self, priority: i32) {
-        self.priority = priority
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
     }
 
     /// Get the job priority
     pub fn priority(&self) -> i32 {
         self.priority
+    }
+
+    pub fn namespace(&self) -> &Option<String> {
+        &self.namespace
+    }
+
+    pub fn with_namespace(mut self, namespace: String) -> Self {
+        self.namespace = Some(namespace);
+        self
     }
 }
 

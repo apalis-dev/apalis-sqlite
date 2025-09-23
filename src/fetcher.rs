@@ -118,7 +118,7 @@ where
     type Item = Result<Option<SqliteTask<Args>>, sqlx::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut this = self.get_mut();
+        let this = self.get_mut();
         if this.delay_stream.is_none() {
             let strategy = this
                 .config

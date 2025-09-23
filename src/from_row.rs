@@ -33,13 +33,13 @@ impl TaskRow {
     where
         D::Error: std::error::Error + Send + Sync + 'static,
     {
-        let mut ctx = SqliteContext::default();
-        ctx.set_lock_by(self.lock_by);
-        ctx.set_max_attempts(self.max_attempts.unwrap_or(25) as i32);
-        ctx.set_done_at(self.done_at);
-        ctx.set_last_result(self.last_error);
-        ctx.set_priority(self.priority.unwrap_or(0) as i32);
-        ctx.set_lock_at(self.lock_at);
+        let ctx = SqliteContext::default()
+            .with_done_at(self.done_at)
+            .with_lock_by(self.lock_by)
+            .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
+            .with_last_result(self.last_error)
+            .with_priority(self.priority.unwrap_or(0) as i32)
+            .with_lock_at(self.lock_at);
         let args = D::decode(&self.job).map_err(|e| sqlx::Error::Decode(e.into()))?;
         let task = TaskBuilder::new(args)
             .with_ctx(ctx)

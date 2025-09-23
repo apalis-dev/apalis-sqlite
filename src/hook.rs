@@ -1,17 +1,37 @@
-use futures::channel::mpsc::{self, Receiver};
-use futures::{SinkExt, StreamExt};
+use futures::channel::mpsc::{self, Receiver, UnboundedReceiver};
+use futures::{SinkExt, Stream, StreamExt};
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::Executor;
 use sqlx::SqlitePool;
 use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 #[derive(Debug)]
 pub struct DbEvent {
-    pub op: &'static str,
+    op: &'static str,
     db_name: String,
-    pub table_name: String,
+    table_name: String,
     rowid: i64,
+}
+
+impl DbEvent {
+    pub fn operation(&self) -> &'static str {
+        self.op
+    }
+
+    pub fn db_name(&self) -> &str {
+        &self.db_name
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub fn rowid(&self) -> i64 {
+        self.rowid
+    }
 }
 
 // Callback for SQLite update hook
@@ -37,7 +57,7 @@ pub(crate) extern "C" fn update_hook_callback(
         let tx = &mut *(arg as *mut mpsc::UnboundedSender<DbEvent>);
 
         // Ignore send errors (receiver closed)
-        let _ = tx.send(DbEvent {
+        let _ = tx.start_send(DbEvent {
             op: op_str,
             db_name: db,
             table_name: table,
@@ -46,52 +66,19 @@ pub(crate) extern "C" fn update_hook_callback(
     }
 }
 
-
-pub struct PushListener {
-    pub rx: Receiver<DbEvent>,
+pub struct HookListener {
+    rx: UnboundedReceiver<DbEvent>,
+}
+impl HookListener {
+    pub fn new(rx: UnboundedReceiver<DbEvent>) -> Self {
+        Self { rx }
+    }
 }
 
-#[cfg(test)]
-async fn run_it() -> Result<(), sqlx::Error> {
-    let (tx, mut rx) = mpsc::channel::<DbEvent>(10);
+impl Stream for HookListener {
+    type Item = DbEvent;
 
-    let pool = SqlitePool::connect(":memory:").await.unwrap();
-
-    let mut conn = pool.acquire().await?;
-
-    // Create table
-    conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-        .await?;
-
-    // Get raw sqlite3* handle
-    let handle: *mut sqlite3 = conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
-
-    // Put sender in a Box so it has a stable memory address
-    let tx_box = Box::new(tx);
-    let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
-
-    unsafe {
-        sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.rx.poll_next_unpin(cx)
     }
-
-    // Spawn a task to process events asynchronously
-    tokio::spawn(async move {
-        while let Some(event) = rx.next().await {
-            println!("Got DB event: {:?}", event);
-        }
-    });
-
-    // These will trigger the hook
-    conn.execute("INSERT INTO users (name) VALUES ('Alice')")
-        .await?;
-    conn.execute("INSERT INTO users (name) VALUES ('Bob')")
-        .await?;
-    conn.execute("UPDATE users SET name = 'Charlie' WHERE id = 1")
-        .await?;
-    conn.execute("DELETE FROM users WHERE id = 2").await?;
-
-    // Let events flush
-    // tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-
-    Ok(())
 }

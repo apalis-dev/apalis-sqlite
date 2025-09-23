@@ -15,8 +15,9 @@ use futures::{
     future::ready,
     stream::{self, BoxStream, select},
 };
-use serde_json::Value;
+use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::{Pool, Sqlite, SqlitePool};
+use std::ffi::c_void;
 use ulid::Ulid;
 
 use crate::{
@@ -24,7 +25,7 @@ use crate::{
     config::Config,
     context::SqliteContext,
     fetcher::{SqliteFetcher, fetch_next},
-    hook::{DbEvent, PushListener, update_hook_callback},
+    hook::{DbEvent, HookListener, update_hook_callback},
     sink::SqliteSink,
 };
 
@@ -34,12 +35,15 @@ mod context;
 mod fetcher;
 mod from_row;
 mod hook;
+mod shared;
 mod sink;
-// mod shared;
 
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 
 type DefaultFetcher<Args> = PhantomData<SqliteFetcher<Args, String, JsonCodec<String>>>;
+
+const INSERT_OPERATION: &'static str = "INSERT";
+const JOBS_TABLE: &'static str = "Jobs";
 
 #[pin_project::pin_project]
 pub struct SqliteStorage<T, C = JsonCodec<String>, Fetcher = DefaultFetcher<T>> {
@@ -141,15 +145,11 @@ impl<T> SqliteStorage<T> {
     pub async fn new_with_hook(
         pool: &Pool<Sqlite>,
         config: &Config,
-    ) -> SqliteStorage<T, JsonCodec<String>, PushListener> {
-        use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
-        use std::ffi::{CStr, c_void};
-        use std::os::raw::{c_char, c_int};
-
+    ) -> SqliteStorage<T, JsonCodec<String>, HookListener> {
         let pool = pool.clone();
-        let (tx, rx) = mpsc::channel::<DbEvent>(10);
+        let (tx, rx) = mpsc::unbounded::<DbEvent>();
 
-        let listener = PushListener { rx };
+        let listener = HookListener::new(rx);
 
         let mut conn = pool.acquire().await.unwrap();
         // Get raw sqlite3* handle
@@ -214,7 +214,7 @@ where
     }
 }
 
-impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, PushListener>
+impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, HookListener>
 where
     Args: Send + 'static + Unpin,
     Decode: Codec<Args, Compact = String> + Send + 'static,
@@ -241,7 +241,7 @@ where
             worker_type,
             worker.clone(),
             Utc::now().timestamp(),
-            "SqliteStorage",
+            "SqliteStorageWithHook",
         );
         stream::once(fut).boxed()
     }
@@ -258,11 +258,8 @@ where
             SqliteFetcher::new(&self.pool, &self.config, &worker);
         let lazy_fetcher = self
             .fetcher
-            .rx
-            .inspect(|res| {
-                println!("Received DB Event: {:?}", res);
-            })
-            .filter(|a| ready(a.op == "UPDATE" && a.table_name == "Jobs"))
+            .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))
+            .ready_chunks(self.config.buffer_size())
             .then(move |_| fetch_next::<Args, Decode>(pool.clone(), config.clone(), worker.clone()))
             .flat_map(|res| match res {
                 Ok(tasks) => stream::iter(tasks).map(Ok).boxed(),
@@ -273,7 +270,7 @@ where
                 Err(e) => Err(e),
             });
 
-        select(eager_fetcher, lazy_fetcher).boxed()
+        select(lazy_fetcher, eager_fetcher).boxed()
     }
 }
 
@@ -317,7 +314,7 @@ mod tests {
     use apalis_core::{
         backend::poll_strategy::{IntervalStrategy, StrategyBuilder},
         error::BoxDynError,
-        worker::{builder::WorkerBuilder, event::Event, ext::event_listener::EventListenerExt},
+        worker::builder::WorkerBuilder,
     };
     use futures::SinkExt;
 
@@ -336,7 +333,7 @@ mod tests {
             start += 1;
             let task = Task::builder(start)
                 .run_after(Duration::from_secs(1))
-                // .with_ctx(SqliteContext::new().with_priority(1))
+                .with_ctx(SqliteContext::new().with_priority(1))
                 .build();
             Ok(task)
         })
@@ -368,27 +365,29 @@ mod tests {
         let config = Config::default()
             .with_poll_interval(lazy_strategy)
             .set_buffer_size(5);
-        let mut backend = SqliteStorage::new_with_hook(&pool, &config).await;
+        let backend = SqliteStorage::new_with_hook(&pool, &config).await;
 
-        // SqliteStorage::setup(&backend.pool).await.unwrap();
-        let mut start = 0;
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let mut start = 0;
 
-        let mut items = stream::repeat_with(move || {
-            start += 1;
-            let task = Task::builder(start)
-                .run_after(Duration::from_secs(2))
-                // .with_ctx(SqliteContext::new().with_priority(1))
-                .build();
-            Ok(task)
-        })
-        .take(ITEMS);
-        backend.send_all(&mut items).await.unwrap();
-
-        println!("Starting worker at {}", Local::now());
+            let items = stream::repeat_with(move || {
+                start += 1;
+                let task = Task::builder(serde_json::to_string(&start).unwrap())
+                    .run_after(Duration::from_secs(1))
+                    .with_ctx(SqliteContext::new().with_priority(start))
+                    .build();
+                task
+            })
+            .take(ITEMS)
+            .collect::<Vec<_>>()
+            .await;
+            sink::push_tasks(pool, config, items).await.unwrap();
+        });
 
         async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
-            println!("Processed item: {}", item);
-            if ITEMS == item {
+            // Priority is in reverse order
+            if item == 1 {
                 apalis_core::timer::sleep(Duration::from_secs(1)).await;
                 wrk.stop().unwrap();
             }

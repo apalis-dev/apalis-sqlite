@@ -1,5 +1,7 @@
 use std::{
+    cmp::max,
     collections::{HashMap, HashSet},
+    ffi::c_void,
     future::ready,
     marker::PhantomData,
     pin::Pin,
@@ -8,8 +10,12 @@ use std::{
 };
 
 use crate::{
-    Config, InsertEvent, SqliteTask, PostgresStorage, ack::SqliteAck, context::SqliteContext,
-    fetcher::SqliteFetcher, register,
+    Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
+    ack::SqliteAck,
+    context::SqliteContext,
+    fetcher::SqliteFetcher,
+    hook::{DbEvent, update_hook_callback},
+    register,
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
 use apalis_core::{
@@ -29,58 +35,97 @@ use futures::{
     lock::Mutex,
     stream::{self, BoxStream, select},
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use serde_json::Value;
-use sqlx::{SqlitePool, postgres::SqliteListener};
+use sqlx::SqlitePool;
 use ulid::Ulid;
 
-pub struct SharedPostgresStorage<Compact = Value, Codec = JsonCodec<Value>> {
+pub struct SharedSqliteStorage {
     pool: SqlitePool,
-    registry: Arc<Mutex<HashMap<String, Sender<TaskId>>>>,
+    registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<String>>>>>,
     drive: Shared<BoxFuture<'static, ()>>,
-    _marker: PhantomData<(Compact, Codec)>,
 }
 
-impl SharedPostgresStorage {
+impl SharedSqliteStorage {
     pub fn new(pool: SqlitePool) -> Self {
-        let registry: Arc<Mutex<HashMap<String, Sender<TaskId>>>> =
+        let registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<String>>>>> =
             Arc::new(Mutex::new(HashMap::default()));
         let p = pool.clone();
         let instances = registry.clone();
         Self {
             pool,
             drive: async move {
-                let mut listener = SqliteListener::connect_with(&p).await.unwrap();
-                listener.listen("apalis::job::insert").await.unwrap();
-                listener
-                    .into_stream()
-                    .filter_map(|notification| {
-                        let instances = instances.clone();
-                        async move {
-                            let Sqlite_notification = notification.ok()?;
-                            let payload = Sqlite_notification.payload();
-                            let ev: InsertEvent = serde_json::from_str(payload).ok()?;
-                            let instances = instances.lock().await;
-                            if instances.get(&ev.job_type).is_some() {
-                                return Some(ev);
-                            }
-                            None
-                        }
-                    })
-                    .for_each(|ev| {
-                        let instances = instances.clone();
-                        async move {
+                let (tx, rx) = mpsc::unbounded::<DbEvent>();
+
+                let mut conn = p.acquire().await.unwrap();
+                // Get raw sqlite3* handle
+                let handle: *mut sqlite3 =
+                    conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
+
+                // Put sender in a Box so it has a stable memory address
+                let tx_box = Box::new(tx);
+                let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
+
+                unsafe {
+                    sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
+                }
+
+                rx.filter(|a| {
+                    ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE)
+                })
+                .ready_chunks(instances.try_lock().map(|r| r.len()).unwrap_or(10))
+                .then(|events| {
+                    let row_ids = events.iter().map(|e| e.rowid()).collect::<HashSet<i64>>();
+                    let instances = instances.clone();
+                    let pool = p.clone();
+                    async move {
+                        let instances = instances.lock().await;
+                        let job_types = serde_json::to_string(
+                            &instances.keys().cloned().collect::<Vec<String>>(),
+                        )
+                        .unwrap();
+                        let row_ids = serde_json::to_string(&row_ids).unwrap();
+                        let mut tx = pool.begin().await?;
+                        let buffer_size = max(10, instances.len()) as i32;
+                        let res: Vec<_> = sqlx::query_file_as!(
+                            TaskRow,
+                            "queries/task/fetch_shared.sql",
+                            job_types,
+                            row_ids,
+                            buffer_size,
+                        )
+                        .fetch(&mut *tx)
+                        .map(|r| {
+                            Ok::<_, sqlx::Error>(r?.try_into_task::<JsonCodec<String>, String>()?)
+                        })
+                        .try_collect()
+                        .await?;
+                        tx.commit().await?;
+                        Ok::<_, sqlx::Error>(res)
+                    }
+                })
+                .for_each(|r| async {
+                    match r {
+                        Ok(tasks) => {
                             let mut instances = instances.lock().await;
-                            let sender = instances.get_mut(&ev.job_type).unwrap();
-                            sender.send(ev.id).await.unwrap();
+                            for task in tasks {
+                                if let Some(tx) = instances.get_mut(
+                                    task.parts.ctx.namespace().as_ref().expect("Namespace must be set"),
+                                ) {
+                                    let _ = tx.send(task).await;
+                                }
+                            }
                         }
-                    })
-                    .await;
+                        Err(e) => {
+                            log::error!("Error fetching tasks: {:?}", e);
+                        }
+                    }
+                })
+                .await;
             }
             .boxed()
             .shared(),
             registry,
-            _marker: PhantomData,
         }
     }
 }
@@ -90,8 +135,8 @@ pub enum SharedPostgresError {
     RegistryLocked,
 }
 
-impl<Args, Compact, Codec> MakeShared<Args> for SharedPostgresStorage<Compact, Codec> {
-    type Backend = PostgresStorage<Args, Compact, Codec, SharedFetcher>;
+impl<Args> MakeShared<Args> for SharedSqliteStorage {
+    type Backend = SqliteStorage<Args, JsonCodec<String>, SharedFetcher>;
     type Config = Config;
     type MakeError = SharedPostgresError;
     fn make_shared(&mut self) -> Result<Self::Backend, Self::MakeError>
@@ -115,8 +160,7 @@ impl<Args, Compact, Codec> MakeShared<Args> for SharedPostgresStorage<Compact, C
             ));
         }
         let sink = SqliteSink::new(&self.pool, &config);
-        Ok(PostgresStorage {
-            _marker: PhantomData,
+        Ok(SqliteStorage {
             config,
             fetcher: SharedFetcher {
                 poller: self.drive.clone(),
@@ -124,17 +168,19 @@ impl<Args, Compact, Codec> MakeShared<Args> for SharedPostgresStorage<Compact, C
             },
             pool: self.pool.clone(),
             sink,
+            job_type: PhantomData,
+            codec: PhantomData,
         })
     }
 }
 
-pub struct SharedFetcher {
+pub struct SharedFetcher<Compact = String> {
     poller: Shared<BoxFuture<'static, ()>>,
-    receiver: Receiver<TaskId>,
+    receiver: Receiver<SqliteTask<Compact>>,
 }
 
-impl Stream for SharedFetcher {
-    type Item = TaskId;
+impl<Compact> Stream for SharedFetcher<Compact> {
+    type Item = SqliteTask<Compact>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -146,10 +192,10 @@ impl Stream for SharedFetcher {
     }
 }
 
-impl<Args, Decode> Backend<Args> for PostgresStorage<Args, Value, Decode, SharedFetcher>
+impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, SharedFetcher>
 where
     Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = Value> + 'static + Unpin + Send,
+    Decode: Codec<Args, Compact = String> + 'static + Unpin + Send,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
     type IdType = Ulid;
@@ -173,7 +219,7 @@ where
             worker_type,
             worker.clone(),
             Utc::now().timestamp(),
-            "SharedPostgresStorage",
+            "SharedSqliteStorage",
         );
         stream::once(fut).boxed()
     }
@@ -183,42 +229,20 @@ where
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
-        let pool = self.pool.clone();
-        let worker_id = worker.name().to_owned();
+        // TODO: Update lock_by field in the database to worker.name()
+        let _worker_id = worker.name().to_owned();
         let lazy_fetcher = self
             .fetcher
-            .map(|t| t.to_string())
-            .ready_chunks(self.config.buffer_size())
-            .then(move |ids| {
-                let pool = pool.clone();
-                let worker_id = worker_id.clone();
-                async move {
-                    let mut tx = pool.begin().await?;
-                    let res: Vec<_> = sqlx::query_file_as!(
-                        TaskRow,
-                        "queries/task/lock_by_id.sql",
-                        &ids,
-                        &worker_id
-                    )
-                    .fetch(&mut *tx)
-                    .map(|r| Ok(Some(r?.try_into_task::<Decode, Args>()?)))
-                    .collect()
-                    .await;
-                    tx.commit().await?;
-                    Ok::<_, sqlx::Error>(res)
-                }
+            .map(|t| {
+                t.try_map(|args| Decode::decode(&args).map_err(|e| sqlx::Error::Decode(e.into())))
             })
             .flat_map(|vec| match vec {
-                Ok(vec) => stream::iter(vec.into_iter().map(|res| match res {
-                    Ok(t) => Ok(t),
-                    Err(e) => Err(e),
-                }))
-                .boxed(),
+                Ok(task) => stream::iter(vec![Ok(Some(task))]).boxed(),
                 Err(e) => stream::once(ready(Err(e))).boxed(),
             })
             .boxed();
 
-        let eager_fetcher = StreamExt::boxed(SqliteFetcher::<Args, Value, Decode>::new(
+        let eager_fetcher = StreamExt::boxed(SqliteFetcher::<Args, String, Decode>::new(
             &self.pool,
             &self.config,
             worker,
@@ -245,10 +269,8 @@ mod tests {
 
     #[tokio::test]
     async fn basic_worker() {
-        let pool = SqlitePool::connect("postgres://postgres:postgres@localhost/apalis_dev")
-            .await
-            .unwrap();
-        let mut store = SharedPostgresStorage::new(pool);
+        let pool = SqlitePool::connect("sqlite://./test.db").await.unwrap();
+        let mut store = SharedSqliteStorage::new(pool);
 
         let mut map_store = store.make_shared().unwrap();
 
@@ -256,11 +278,7 @@ mod tests {
 
         let task = Task::builder(99u32)
             .run_after(Duration::from_secs(2))
-            .with_ctx({
-                let mut ctx = SqliteContext::default();
-                ctx.set_priority(1);
-                ctx
-            })
+            .with_ctx(SqliteContext::new().with_priority(1))
             .build();
 
         map_store

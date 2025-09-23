@@ -37,7 +37,7 @@ impl<Args, Compact, Codec> Clone for SqliteSink<Args, Compact, Codec> {
     }
 }
 
-async fn push_tasks(
+pub(crate) async fn push_tasks(
     pool: SqlitePool,
     cfg: Config,
     buffer: Vec<SqliteTask<String>>,
