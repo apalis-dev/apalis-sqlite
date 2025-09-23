@@ -195,7 +195,7 @@ where
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
         let worker_type = self.config.namespace().to_owned();
-        let fut = register(
+        let fut = heartbeat(
             self.pool.clone(),
             worker_type,
             worker.clone(),
@@ -236,7 +236,7 @@ where
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
         let worker_type = self.config.namespace().to_owned();
-        let fut = register(
+        let fut = heartbeat(
             self.pool.clone(),
             worker_type,
             worker.clone(),
@@ -274,7 +274,7 @@ where
     }
 }
 
-pub(crate) async fn register(
+pub(crate) async fn heartbeat(
     pool: SqlitePool,
     worker_type: String,
     worker: WorkerContext,
@@ -323,10 +323,11 @@ mod tests {
     #[tokio::test]
     async fn basic_worker() {
         const ITEMS: usize = 10;
-        let pool = SqlitePool::connect("sqlite://./test.db").await.unwrap();
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+
         let mut backend = SqliteStorage::new(&pool);
 
-        // SqliteStorage::setup(&backend.pool).await.unwrap();
         let mut start = 0;
 
         let mut items = stream::repeat_with(move || {
@@ -358,7 +359,9 @@ mod tests {
     #[tokio::test]
     async fn hooked_worker() {
         const ITEMS: usize = 20;
-        let pool = SqlitePool::connect("sqlite://./test.db").await.unwrap();
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+
         let lazy_strategy = StrategyBuilder::new()
             .apply(IntervalStrategy::new(Duration::from_secs(5)))
             .build();

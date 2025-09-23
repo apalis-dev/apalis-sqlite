@@ -14,8 +14,8 @@ use crate::{
     ack::SqliteAck,
     context::SqliteContext,
     fetcher::SqliteFetcher,
+    heartbeat,
     hook::{DbEvent, update_hook_callback},
-    register,
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
 use apalis_core::{
@@ -37,7 +37,7 @@ use futures::{
 };
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use serde_json::Value;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, pool};
 use ulid::Ulid;
 
 pub struct SharedSqliteStorage {
@@ -110,7 +110,11 @@ impl SharedSqliteStorage {
                             let mut instances = instances.lock().await;
                             for task in tasks {
                                 if let Some(tx) = instances.get_mut(
-                                    task.parts.ctx.namespace().as_ref().expect("Namespace must be set"),
+                                    task.parts
+                                        .ctx
+                                        .namespace()
+                                        .as_ref()
+                                        .expect("Namespace must be set"),
                                 ) {
                                     let _ = tx.send(task).await;
                                 }
@@ -194,8 +198,8 @@ impl<Compact> Stream for SharedFetcher<Compact> {
 
 impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, SharedFetcher>
 where
-    Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + 'static + Unpin + Send,
+    Args: Send + 'static + Unpin + Sync,
+    Decode: Codec<Args, Compact = String> + 'static + Unpin + Send + Sync,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
     type IdType = Ulid;
@@ -214,14 +218,24 @@ where
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
         let worker_type = self.config.namespace().to_owned();
-        let fut = register(
-            self.pool.clone(),
-            worker_type,
-            worker.clone(),
-            Utc::now().timestamp(),
-            "SharedSqliteStorage",
-        );
-        stream::once(fut).boxed()
+        let keep_alive = *self.config.keep_alive();
+        let pool = self.pool.clone();
+        let worker = worker.clone();
+
+        stream::unfold((), move |()| async move {
+            apalis_core::timer::sleep(keep_alive).await;
+            Some(((), ()))
+        })
+        .then(move |_| {
+            heartbeat(
+                pool.clone(),
+                worker_type.clone(),
+                worker.clone(),
+                Utc::now().timestamp(),
+                "SharedSqliteStorage",
+            )
+        })
+        .boxed()
     }
 
     fn middleware(&self) -> Self::Layer {
@@ -231,6 +245,24 @@ where
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
         // TODO: Update lock_by field in the database to worker.name()
         let _worker_id = worker.name().to_owned();
+        let pool = self.pool.clone();
+        let worker = worker.clone();
+        let worker_type = self.config.namespace().to_owned();
+        // Initial registration heartbeat
+        // This ensures that the worker is registered before fetching any tasks
+        // This also ensures that the worker is marked as alive in case it crashes
+        // before fetching any tasks
+        // Subsequent heartbeats are handled in the heartbeat stream
+        let init = heartbeat(
+            pool.clone(),
+            worker_type.clone(),
+            worker.clone(),
+            Utc::now().timestamp(),
+            "SharedSqliteStorage",
+        );
+        let starter = stream::once(init)
+            .filter_map(|s| future::ready(s.ok().map(|_| Ok(None::<SqliteTask<Args>>))))
+            .boxed();
         let lazy_fetcher = self
             .fetcher
             .map(|t| {
@@ -245,9 +277,9 @@ where
         let eager_fetcher = StreamExt::boxed(SqliteFetcher::<Args, String, Decode>::new(
             &self.pool,
             &self.config,
-            worker,
+            &worker,
         ));
-        select(lazy_fetcher, eager_fetcher).boxed()
+        starter.chain(select(lazy_fetcher, eager_fetcher)).boxed()
     }
 }
 
@@ -269,7 +301,10 @@ mod tests {
 
     #[tokio::test]
     async fn basic_worker() {
-        let pool = SqlitePool::connect("sqlite://./test.db").await.unwrap();
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+
+        SqliteStorage::setup(&pool).await.unwrap();
+
         let mut store = SharedSqliteStorage::new(pool);
 
         let mut map_store = store.make_shared().unwrap();
@@ -289,7 +324,7 @@ mod tests {
 
         async fn send_reminder<T, I>(
             _: T,
-            task_id: TaskId<I>,
+            _task_id: TaskId<I>,
             wrk: WorkerContext,
         ) -> Result<(), BoxDynError> {
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -303,6 +338,6 @@ mod tests {
         let map_worker = WorkerBuilder::new("rango-tango-1")
             .backend(map_store)
             .build(send_reminder);
-        let res = tokio::try_join!(int_worker.run(), map_worker.run()).unwrap();
+        tokio::try_join!(int_worker.run(), map_worker.run()).unwrap();
     }
 }
