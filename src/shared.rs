@@ -24,7 +24,6 @@ use apalis_core::{
         codec::{Codec, json::JsonCodec},
         shared::MakeShared,
     },
-    task::{Task, task_id::TaskId},
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
 use chrono::Utc;
@@ -36,8 +35,7 @@ use futures::{
     stream::{self, BoxStream, select},
 };
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
-use serde_json::Value;
-use sqlx::{SqlitePool, pool};
+use sqlx::SqlitePool;
 use ulid::Ulid;
 
 pub struct SharedSqliteStorage {
@@ -95,9 +93,7 @@ impl SharedSqliteStorage {
                             buffer_size,
                         )
                         .fetch(&mut *tx)
-                        .map(|r| {
-                            Ok::<_, sqlx::Error>(r?.try_into_task::<JsonCodec<String>, String>()?)
-                        })
+                        .map(|r| r?.try_into_task::<JsonCodec<String>, String>())
                         .try_collect()
                         .await?;
                         tx.commit().await?;
@@ -121,7 +117,7 @@ impl SharedSqliteStorage {
                             }
                         }
                         Err(e) => {
-                            log::error!("Error fetching tasks: {:?}", e);
+                            log::error!("Error fetching tasks: {e:?}");
                         }
                     }
                 })
@@ -133,9 +129,11 @@ impl SharedSqliteStorage {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SharedPostgresError {
+    #[error("Namespace {0} already exists")]
     NamespaceExists(String),
+    #[error("Could not acquire registry lock")]
     RegistryLocked,
 }
 
@@ -158,7 +156,7 @@ impl<Args> MakeShared<Args> for SharedSqliteStorage {
             .registry
             .try_lock()
             .ok_or(SharedPostgresError::RegistryLocked)?;
-        if let Some(_) = r.insert(config.namespace().to_owned(), tx) {
+        if r.insert(config.namespace().to_owned(), tx).is_some() {
             return Err(SharedPostgresError::NamespaceExists(
                 config.namespace().to_owned(),
             ));
@@ -186,7 +184,7 @@ pub struct SharedFetcher<Compact = String> {
 impl<Compact> Stream for SharedFetcher<Compact> {
     type Item = SqliteTask<Compact>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
         // Keep the poller alive by polling it, but ignoring the output
         let _ = this.poller.poll_unpin(cx);
@@ -292,6 +290,7 @@ mod tests {
     use apalis_core::{
         backend::{TaskSink, memory::MemoryStorage},
         error::BoxDynError,
+        task::{Task, task_id::TaskId},
         worker::{builder::WorkerBuilder, event::Event, ext::event_listener::EventListenerExt},
     };
 

@@ -1,5 +1,5 @@
 use std::{
-    pin::{self, Pin},
+    pin::Pin,
     task::{Context, Poll},
 };
 
@@ -7,13 +7,13 @@ use apalis_core::{
     backend::codec::{Codec, json::JsonCodec},
     error::BoxDynError,
 };
-use chrono::DateTime;
 use futures::Sink;
-use serde_json::Value;
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
 use crate::{SqliteStorage, SqliteTask, config::Config};
+
+type FlushFuture = Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send>>;
 
 #[pin_project::pin_project]
 pub struct SqliteSink<Args, Compact = String, Codec = JsonCodec<String>> {
@@ -21,7 +21,7 @@ pub struct SqliteSink<Args, Compact = String, Codec = JsonCodec<String>> {
     config: Config,
     buffer: Vec<SqliteTask<Compact>>,
     #[pin]
-    flush_future: Option<Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send>>>,
+    flush_future: Option<FlushFuture>,
     _marker: std::marker::PhantomData<(Args, Codec)>,
 }
 
@@ -52,8 +52,8 @@ pub(crate) async fn push_tasks(
             .map(|id| id.to_string())
             .unwrap_or(Ulid::new().to_string());
         let run_at = task.parts.run_at as i64;
-        let max_attempts = task.parts.ctx.max_attempts() as i32;
-        let priority = task.parts.ctx.priority() as i32;
+        let max_attempts = task.parts.ctx.max_attempts();
+        let priority = task.parts.ctx.priority();
         let args = task.args;
         sqlx::query_file!(
             "queries/task/sink.sql",
@@ -86,7 +86,7 @@ impl<Args, Compact, Codec> SqliteSink<Args, Compact, Codec> {
 
 impl<Args, Encode, Fetcher> Sink<SqliteTask<Args>> for SqliteStorage<Args, Encode, Fetcher>
 where
-    Args:  Send + Sync + 'static,
+    Args: Send + Sync + 'static,
     Encode: Codec<Args, Compact = String>,
     Encode::Error: std::error::Error + Send + Sync + 'static,
     Encode::Error: Into<BoxDynError>,
@@ -97,7 +97,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(mut self: Pin<&mut Self>, item: SqliteTask<Args>) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: SqliteTask<Args>) -> Result<(), Self::Error> {
         // Add the item to the buffer
         self.project()
             .sink

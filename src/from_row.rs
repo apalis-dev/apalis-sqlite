@@ -4,8 +4,6 @@ use apalis_core::{
     backend::codec::Codec,
     task::{attempt::Attempt, builder::TaskBuilder, status::Status, task_id::TaskId},
 };
-use chrono::{DateTime, Utc};
-use serde_json::{Map, Value};
 
 use crate::{SqliteTask, context::SqliteContext};
 

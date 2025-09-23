@@ -1,13 +1,8 @@
 use std::convert::Infallible;
 
-use apalis_core::{
-    task::{Task, status::Status},
-    task_fn::FromRequest,
-};
+use apalis_core::task_fn::FromRequest;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use ulid::Ulid;
 
 use crate::SqliteTask;
 

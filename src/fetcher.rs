@@ -4,7 +4,6 @@ use std::{
     pin::Pin,
     sync::{Arc, atomic::AtomicUsize},
     task::{Context, Poll},
-    time::{Duration, Instant},
 };
 
 use apalis_core::{
@@ -13,16 +12,14 @@ use apalis_core::{
         poll_strategy::{PollContext, PollStrategyExt},
     },
     task::Task,
-    timer::Delay,
     worker::context::WorkerContext,
 };
 use futures::{
-    Future, FutureExt, StreamExt,
+    FutureExt, StreamExt,
     future::BoxFuture,
-    stream::{self, BoxStream, Stream},
+    stream::Stream,
 };
 use pin_project::pin_project;
-use serde_json::Value;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use ulid::Ulid;
 

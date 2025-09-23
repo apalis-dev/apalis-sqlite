@@ -22,10 +22,8 @@ use ulid::Ulid;
 
 use crate::{
     ack::SqliteAck,
-    config::Config,
-    context::SqliteContext,
     fetcher::{SqliteFetcher, fetch_next},
-    hook::{DbEvent, HookListener, update_hook_callback},
+    hook::update_hook_callback,
     sink::SqliteSink,
 };
 
@@ -33,17 +31,21 @@ mod ack;
 mod config;
 mod context;
 mod fetcher;
-mod from_row;
+pub mod from_row;
 mod hook;
 mod shared;
 mod sink;
 
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
+pub use config::Config;
+pub use context::SqliteContext;
+pub use hook::{DbEvent, HookListener};
+pub use shared::{SharedPostgresError, SharedSqliteStorage};
 
 type DefaultFetcher<Args> = PhantomData<SqliteFetcher<Args, String, JsonCodec<String>>>;
 
-const INSERT_OPERATION: &'static str = "INSERT";
-const JOBS_TABLE: &'static str = "Jobs";
+const INSERT_OPERATION: &str = "INSERT";
+const JOBS_TABLE: &str = "Jobs";
 
 #[pin_project::pin_project]
 pub struct SqliteStorage<T, C = JsonCodec<String>, Fetcher = DefaultFetcher<T>> {

@@ -1,9 +1,8 @@
 use apalis_core::{
     error::BoxDynError,
     task::{Parts, status::Status},
-    worker::{self, ext::ack::Acknowledge},
+    worker::ext::ack::Acknowledge,
 };
-use chrono::Utc;
 use futures::{FutureExt, future::BoxFuture};
 use serde::Serialize;
 use sqlx::SqlitePool;
@@ -29,7 +28,7 @@ impl<Res: Serialize> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
         res: &Result<Res, BoxDynError>,
         parts: &Parts<SqliteContext, Ulid>,
     ) -> Self::Future {
-        let task_id = parts.task_id.clone();
+        let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
 
         let response = serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()));

@@ -1,8 +1,5 @@
-use futures::channel::mpsc::{self, Receiver, UnboundedReceiver};
-use futures::{SinkExt, Stream, StreamExt};
-use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
-use sqlx::Executor;
-use sqlx::SqlitePool;
+use futures::channel::mpsc::{self, UnboundedReceiver};
+use futures::{Stream, StreamExt};
 use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
 use std::pin::Pin;

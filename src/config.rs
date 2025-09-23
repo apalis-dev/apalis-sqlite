@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use apalis_core::backend::poll_strategy::{IntervalStrategy, MultiStrategy, StrategyBuilder};
-use sqlx::sqlite::SqliteConnectOptions;
 
 #[derive(Debug, Clone)]
 pub struct Config {
