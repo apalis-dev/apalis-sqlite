@@ -24,7 +24,7 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-apalis-core = { version = "1.0.0-alpha.2", default-features = false, features = [
+apalis-core = { version = "1.0.0-alpha.3", default-features = false, features = [
     "sleep",
     "json",
 ] }
@@ -40,7 +40,7 @@ ulid = { version = "1" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.2", features = ["test-utils"] }
+apalis-core = { version = "1.0.0-alpha.3", features = ["test-utils"] }
 apalis-sqlite = { path = "." , features = ["migrate", "tokio-comp"] }
 
 [package.metadata.docs.rs]

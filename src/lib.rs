@@ -35,6 +35,7 @@ pub mod from_row;
 mod hook;
 mod shared;
 mod sink;
+mod traits;
 
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use config::Config;
@@ -289,7 +290,7 @@ pub(crate) async fn heartbeat(
     let svc = worker.get_service().to_owned();
     let worker = worker.name().to_owned();
     let res = sqlx::query_file!(
-        "queries/worker/register.sql",
+        "queries/backend/heartbeat.sql",
         worker,
         worker_type,
         backend_type,

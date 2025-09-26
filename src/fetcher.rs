@@ -34,7 +34,7 @@ where
     let worker = worker.name().to_string();
     sqlx::query_file_as!(
         TaskRow,
-        "queries/task/fetch_next.sql",
+        "queries/backend/fetch_next.sql",
         worker,
         job_type,
         buffer_size

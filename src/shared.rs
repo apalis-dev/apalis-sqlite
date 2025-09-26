@@ -87,7 +87,7 @@ impl SharedSqliteStorage {
                         let buffer_size = max(10, instances.len()) as i32;
                         let res: Vec<_> = sqlx::query_file_as!(
                             TaskRow,
-                            "queries/task/fetch_shared.sql",
+                            "queries/backend/fetch_next_shared.sql",
                             job_types,
                             row_ids,
                             buffer_size,
