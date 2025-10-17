@@ -12,10 +12,9 @@ use std::{
 use crate::{
     Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
     ack::{LockTaskLayer, SqliteAck},
-    config,
+    callback::{DbEvent, update_hook_callback},
     context::SqliteContext,
     fetcher::SqlitePollFetcher,
-    hook::{DbEvent, update_hook_callback},
     initial_heartbeat, keep_alive,
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
@@ -27,7 +26,6 @@ use apalis_core::{
     },
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-use chrono::Utc;
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
@@ -243,7 +241,6 @@ where
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
         let pool = self.pool.clone();
         let worker = worker.clone();
-        let worker_type = self.config.queue().to_owned();
         // Initial registration heartbeat
         // This ensures that the worker is registered before fetching any tasks
         // This also ensures that the worker is marked as alive in case it crashes

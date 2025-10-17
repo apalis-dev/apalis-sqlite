@@ -3,7 +3,6 @@ use futures::{Stream, StreamExt};
 use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 #[derive(Debug)]
@@ -73,24 +72,22 @@ pub(crate) extern "C" fn update_hook_callback(
 }
 
 #[derive(Debug, Clone)]
-pub struct HookListener {
-    rx: Arc<Mutex<UnboundedReceiver<DbEvent>>>,
+pub struct HookCallbackListener;
+
+#[derive(Debug)]
+pub struct CallbackListener {
+    rx: UnboundedReceiver<DbEvent>,
 }
-impl HookListener {
+impl CallbackListener {
     pub fn new(rx: UnboundedReceiver<DbEvent>) -> Self {
-        Self {
-            rx: Arc::new(Mutex::new(rx)),
-        }
+        Self { rx }
     }
 }
 
-impl Stream for HookListener {
+impl Stream for CallbackListener {
     type Item = DbEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.rx
-            .try_lock()
-            .map(|mut rx| rx.poll_next_unpin(cx))
-            .unwrap_or(Poll::Pending)
+        self.rx.poll_next_unpin(cx)
     }
 }

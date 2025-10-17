@@ -9,7 +9,7 @@ use apalis_core::{
     error::BoxDynError,
 };
 use futures::{
-    FutureExt, Sink, TryFutureExt,
+    FutureExt, Sink,
     future::{BoxFuture, Shared},
 };
 use sqlx::SqlitePool;
@@ -41,7 +41,7 @@ impl<Args, Compact, Codec> Clone for SqliteSink<Args, Compact, Codec> {
     }
 }
 
-pub(crate) async fn push_tasks(
+pub async fn push_tasks(
     pool: SqlitePool,
     cfg: Config,
     buffer: Vec<SqliteTask<String>>,

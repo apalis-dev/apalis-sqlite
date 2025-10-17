@@ -1,6 +1,6 @@
 use apalis_core::{
     error::{AbortError, BoxDynError},
-    task::{self, Parts, status::Status},
+    task::{Parts, status::Status},
     worker::{context::WorkerContext, ext::ack::Acknowledge},
 };
 use futures::{FutureExt, future::BoxFuture};

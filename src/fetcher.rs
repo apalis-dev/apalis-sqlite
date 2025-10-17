@@ -21,7 +21,7 @@ use ulid::Ulid;
 
 use crate::{SqliteTask, config::Config, context::SqliteContext, from_row::TaskRow};
 
-pub(crate) async fn fetch_next<Args, D: Codec<Args, Compact = String>>(
+pub async fn fetch_next<Args, D: Codec<Args, Compact = String>>(
     pool: SqlitePool,
     config: Config,
     worker: WorkerContext,

@@ -1,3 +1,141 @@
+//! # apalis-sqlite
+//!
+//! Background task processing for rust using apalis and sqlite.
+//!
+//! ## Features
+//!
+//! - **Reliable job queue** using SQLite as the backend.
+//! - **Multiple storage types**: standard polling and event-driven (hooked) storage.
+//! - **Custom codecs** for serializing/deserializing job arguments.
+//! - **Heartbeat and orphaned job re-enqueueing** for robust job processing.
+//! - **Integration with apalis workers and middleware.**
+//!
+//! ## Storage Types
+//!
+//! - [`SqliteStorage`]: Standard polling-based storage.
+//! - [`SqliteStorageWithHook`]: Event-driven storage using SQLite update hooks for low-latency job fetching.
+//! - [`SharedSqliteStorage`]: Shared storage for multiple job types.
+//!
+//! The naming is designed to clearly indicate the storage mechanism and its capabilities, but under the hood its the result is the `SqliteStorage` struct with different configurations.
+//!
+//! ## Examples
+//!
+//! ### Basic Worker Example
+//!
+//! ```rust,no_run
+//! use apalis_sqlite::{SqliteStorage, SqliteContext};
+//! use apalis_core::task::Task;
+//! use apalis_core::worker::context::WorkerContext;
+//! use sqlx::SqlitePool;
+//! use futures::stream;
+//! use std::time::Duration;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let pool = SqlitePool::connect(":memory:").await.unwrap();
+//!     SqliteStorage::setup(&pool).await.unwrap();
+//!     let mut backend = SqliteStorage::new(&pool);
+//!
+//!     let mut start = 0;
+//!     let mut items = stream::repeat_with(move || {
+//!         start += 1;
+//!         let task = Task::builder(start)
+//!             .run_after(Duration::from_secs(1))
+//!             .with_ctx(SqliteContext::new().with_priority(1))
+//!             .build();
+//!         Ok(task)
+//!     })
+//!     .take(10);
+//!     backend.send_all(&mut items).await.unwrap();
+//!
+//!     async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
+//! #        if item == 10 {
+//! #            wrk.stop().unwrap();
+//! #        }
+//!         Ok(())
+//!     }
+//!
+//!     let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-1")
+//!         .backend(backend)
+//!         .build(send_reminder);
+//!     worker.run().await.unwrap();
+//! }
+//! ```
+//!
+//! ### Hooked Worker Example (Event-driven)
+//!
+//! ```rust,no_run
+//! use apalis_sqlite::{SqliteStorage, SqliteContext, Config};
+//! use apalis_core::task::Task;
+//! use apalis_core::worker::context::WorkerContext;
+//! use apalis_core::backend::poll_strategy::{IntervalStrategy, StrategyBuilder};
+//! use sqlx::SqlitePool;
+//! use futures::stream;
+//! use std::time::Duration;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let pool = SqlitePool::connect(":memory:").await.unwrap();
+//!     SqliteStorage::setup(&pool).await.unwrap();
+//!
+//!     let lazy_strategy = StrategyBuilder::new()
+//!         .apply(IntervalStrategy::new(Duration::from_secs(5)))
+//!         .build();
+//!     let config = Config::new("queue")
+//!         .with_poll_interval(lazy_strategy)
+//!         .set_buffer_size(5);
+//!     let backend = SqliteStorage::new_with_callback(&pool, &config);
+//!
+//!     tokio::spawn({
+//!         let pool = pool.clone();
+//!         let config = config.clone();
+//!         async move {
+//!             tokio::time::sleep(Duration::from_secs(2)).await;
+//!             let mut start = 0;
+//!             let items = stream::repeat_with(move || {
+//!                 start += 1;
+//!                 Task::builder(start)
+//!                     .run_after(Duration::from_secs(1))
+//!                     .with_ctx(SqliteContext::new().with_priority(start))
+//!                     .build()
+//!             })
+//!             .take(20)
+//!             .collect::<Vec<_>>()
+//!             .await;
+//!             apalis_sqlite::sink::push_tasks(pool, config, items).await.unwrap();
+//!         }
+//!     });
+//!
+//!     async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
+//!         if item == 1 {
+//!             apalis_core::timer::sleep(Duration::from_secs(1)).await;
+//!             wrk.stop().unwrap();
+//!         }
+//!         Ok(())
+//!     }
+//!
+//!     let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-2")
+//!         .backend(backend)
+//!         .build(send_reminder);
+//!     worker.run().await.unwrap();
+//! }
+//! ```
+//!
+//! ## Migrations
+//!
+//! If the `migrate` feature is enabled, you can run built-in migrations with:
+//!
+//! ```rust,no_run
+//! # use sqlx::SqlitePool;
+//! # #[tokio::main] async fn main() {
+//! let pool = SqlitePool::connect(":memory:").await.unwrap();
+//! apalis_sqlite::SqliteStorage::setup(&pool).await.unwrap();
+//! # }
+//! ```
+//!
+//! ## License
+//!
+//! Licensed under either of Apache License, Version 2.0 or MIT license at your option.
 use std::{fmt, marker::PhantomData};
 
 use apalis_core::{
@@ -9,7 +147,7 @@ use apalis_core::{
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
 use futures::{
-    FutureExt, StreamExt, TryStreamExt,
+    FutureExt, StreamExt, TryFutureExt, TryStreamExt,
     channel::mpsc,
     future::ready,
     stream::{self, BoxStream, select},
@@ -22,27 +160,29 @@ use ulid::Ulid;
 
 use crate::{
     ack::{LockTaskLayer, SqliteAck},
+    callback::{HookCallbackListener, update_hook_callback},
     fetcher::{SqliteFetcher, SqlitePollFetcher, fetch_next},
-    hook::update_hook_callback,
-    reenqueue_orphaned::{reenqueue_orphaned, reenqueue_orphaned_stream},
+    queries::{
+        keep_alive::{initial_heartbeat, keep_alive, keep_alive_stream},
+        reenqueue_orphaned::reenqueue_orphaned_stream,
+    },
     sink::SqliteSink,
 };
 
 mod ack;
+mod callback;
 mod config;
 mod context;
-mod fetcher;
+pub mod fetcher;
 pub mod from_row;
-mod hook;
-mod reenqueue_orphaned;
+pub mod queries;
 mod shared;
 mod sink;
-mod traits;
 
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
+pub use callback::{CallbackListener, DbEvent};
 pub use config::Config;
 pub use context::SqliteContext;
-pub use hook::{DbEvent, HookListener};
 pub use shared::{SharedPostgresError, SharedSqliteStorage};
 pub use sqlx::SqlitePool;
 
@@ -154,33 +294,17 @@ impl<T> SqliteStorage<T> {
         }
     }
 
-    pub async fn new_with_hook(
+    pub fn new_with_callback(
         pool: &Pool<Sqlite>,
         config: &Config,
-    ) -> SqliteStorage<T, JsonCodec<String>, HookListener> {
-        let pool = pool.clone();
-        let (tx, rx) = mpsc::unbounded::<DbEvent>();
-
-        let listener = HookListener::new(rx);
-
-        let mut conn = pool.acquire().await.unwrap();
-        // Get raw sqlite3* handle
-        let handle: *mut sqlite3 = conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
-
-        // Put sender in a Box so it has a stable memory address
-        let tx_box = Box::new(tx);
-        let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
-
-        unsafe {
-            sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
-        }
+    ) -> SqliteStorage<T, JsonCodec<String>, HookCallbackListener> {
         SqliteStorage {
             pool: pool.clone(),
             job_type: PhantomData,
             config: config.clone(),
             codec: PhantomData,
             sink: SqliteSink::new(&pool, config),
-            fetcher: listener,
+            fetcher: HookCallbackListener,
         }
     }
 }
@@ -218,11 +342,7 @@ where
         let pool = self.pool.clone();
         let config = self.config.clone();
         let worker = worker.clone();
-        let keep_alive = stream::unfold((), move |_| {
-            let register = keep_alive(pool.clone(), config.clone(), worker.clone());
-            let interval = apalis_core::timer::Delay::new(*config.keep_alive());
-            interval.then(move |_| register.map(|res| Some((res, ()))))
-        });
+        let keep_alive = keep_alive_stream(pool, config, worker);
         let reenqueue = reenqueue_orphaned_stream(
             self.pool.clone(),
             self.config.clone(),
@@ -239,7 +359,6 @@ where
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
-        let worker_type = self.config.queue().to_owned();
         let fut = initial_heartbeat(
             self.pool.clone(),
             self.config().clone(),
@@ -257,7 +376,7 @@ where
     }
 }
 
-impl<Args, Decode> Backend for SqliteStorage<Args, Decode, HookListener>
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode, HookCallbackListener>
 where
     Args: Send + 'static + Unpin,
     Decode: Codec<Args, Compact = String> + Send + 'static,
@@ -281,15 +400,10 @@ where
     type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
-        let worker_type = self.config.queue().to_owned();
         let pool = self.pool.clone();
         let config = self.config.clone();
         let worker = worker.clone();
-        let keep_alive = stream::unfold((), move |_| {
-            let register = keep_alive(pool.clone(), config.clone(), worker.clone());
-            let interval = apalis_core::timer::Delay::new(*config.keep_alive());
-            interval.then(move |_| register.map(|res| Some((res, ()))))
-        });
+        let keep_alive = keep_alive_stream(pool, config, worker);
         let reenqueue = reenqueue_orphaned_stream(
             self.pool.clone(),
             self.config.clone(),
@@ -306,6 +420,10 @@ where
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
+        let (tx, rx) = mpsc::unbounded::<DbEvent>();
+
+        let listener = CallbackListener::new(rx);
+
         let pool = self.pool.clone();
         let config = self.config.clone();
         let worker = worker.clone();
@@ -315,11 +433,30 @@ where
             worker.clone(),
             "SqliteStorageWithHook",
         );
-        let register_worker = stream::once(register_worker.map(|_| Ok(None)));
+        let p = pool.clone();
+        let register_worker = stream::once(
+            register_worker
+                .and_then(|_| async move {
+                    // This is still a little tbd, but the idea is to test the update hook
+                    let mut conn = p.acquire().await?;
+                    // Get raw sqlite3* handle
+                    let handle: *mut sqlite3 =
+                        conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
+
+                    // Put sender in a Box so it has a stable memory address
+                    let tx_box = Box::new(tx);
+                    let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
+
+                    unsafe {
+                        sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
+                    }
+                    Ok(())
+                })
+                .map(|_| Ok(None)),
+        );
         let eager_fetcher: SqlitePollFetcher<Args, String, Decode> =
             SqlitePollFetcher::new(&self.pool, &self.config, &worker);
-        let lazy_fetcher = self
-            .fetcher
+        let lazy_fetcher = listener
             .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))
             .ready_chunks(self.config.buffer_size())
             .then(move |_| fetch_next::<Args, Decode>(pool.clone(), config.clone(), worker.clone()))
@@ -336,65 +473,6 @@ where
             .chain(select(lazy_fetcher, eager_fetcher))
             .boxed()
     }
-}
-
-pub async fn initial_heartbeat(
-    pool: SqlitePool,
-    config: Config,
-    worker: WorkerContext,
-    storage_type: &str,
-) -> Result<(), sqlx::Error> {
-    reenqueue_orphaned(pool.clone(), config.clone()).await?;
-    register_worker(pool, config, worker, storage_type).await?;
-    Ok(())
-}
-
-pub(crate) async fn keep_alive(
-    pool: SqlitePool,
-    config: Config,
-    worker: WorkerContext,
-) -> Result<(), sqlx::Error> {
-    let worker = worker.name().to_owned();
-    let queue = config.queue().to_string();
-    let res = sqlx::query_file!("queries/backend/keep_alive.sql", worker, queue)
-        .execute(&pool)
-        .await?;
-    if res.rows_affected() == 1 {
-        return Err(sqlx::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "WORKER_DOES_NOT_EXIST",
-        )));
-    }
-    Ok(())
-}
-
-pub(crate) async fn register_worker(
-    pool: SqlitePool,
-    config: Config,
-    worker: WorkerContext,
-    storage_type: &str,
-) -> Result<(), sqlx::Error> {
-    let worker_id = worker.name().to_owned();
-    let queue = config.queue().to_string();
-    let layers = worker.get_service().to_owned();
-    let keep_alive = config.keep_alive().as_secs() as i64;
-    let res = sqlx::query_file!(
-        "queries/backend/register_worker.sql",
-        worker_id,
-        queue,
-        storage_type,
-        layers,
-        keep_alive,
-    )
-    .execute(&pool)
-    .await?;
-    if res.rows_affected() == 0 {
-        return Err(sqlx::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "WORKER_ALREADY_EXISTS",
-        )));
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -460,7 +538,7 @@ mod tests {
         let config = Config::new("rango-tango-queue")
             .with_poll_interval(lazy_strategy)
             .set_buffer_size(5);
-        let backend = SqliteStorage::new_with_hook(&pool, &config).await;
+        let backend = SqliteStorage::new_with_callback(&pool, &config);
 
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(2)).await;

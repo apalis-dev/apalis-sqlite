@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use futures::{FutureExt, Stream, stream};
-use serde_json::json;
 use sqlx::SqlitePool;
 
 use crate::Config;
