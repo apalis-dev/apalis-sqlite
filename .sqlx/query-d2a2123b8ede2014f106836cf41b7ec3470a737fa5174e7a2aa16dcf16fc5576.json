@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE\n    Jobs\nSET\n    status = \"Pending\",\n    done_at = NULL,\n    lock_by = NULL,\n    lock_at = NULL,\n    attempts = attempts + 1,\n    last_result = '{\"Err\": \"Re-enqueued due to worker heartbeat timeout.\"}'\nWHERE\n    id IN (\n        SELECT\n            Jobs.id\n        FROM\n            Jobs\n            INNER JOIN Workers ON lock_by = Workers.id\n        WHERE\n            (\n                status = \"Running\"\n                OR status = \"Queued\"\n            )\n            AND strftime('%s', 'now') - Workers.last_seen >= ?1\n            AND Workers.worker_type = ?2\n    );\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "d2a2123b8ede2014f106836cf41b7ec3470a737fa5174e7a2aa16dcf16fc5576"
+}

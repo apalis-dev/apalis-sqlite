@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n    *\nFROM\n    Jobs\nWHERE\n    id = ?1\nLIMIT\n    1;\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "job",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "job_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "attempts",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_attempts",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "run_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_result",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "lock_at",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "lock_by",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "done_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "priority",
+        "ordinal": 11,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "a43052e877930a522d6a63789935653f4fe06d10361c555f8ade4b65589520bc"
+}
