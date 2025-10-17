@@ -27,7 +27,7 @@ serde_json = "1"
 apalis-core = { version = "1.0.0-alpha.3", default-features = false, features = [
     "sleep",
     "json",
-] }
+], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -36,12 +36,14 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2.0.0"
 pin-project = "1.1.10"
 libsqlite3-sys = "0.30.1"
-ulid = { version = "1" }
+ulid = { version = "1", features = ["serde"] }
+tower-layer = "0.3.3"
+tower-service = "0.3.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.3", features = ["test-utils"] }
-apalis-sqlite = { path = "." , features = ["migrate", "tokio-comp"] }
+apalis-core = { version = "1.0.0-alpha.3", features = ["test-utils"], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
+apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`

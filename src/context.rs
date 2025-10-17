@@ -14,7 +14,7 @@ pub struct SqliteContext {
     lock_by: Option<String>,
     done_at: Option<i64>,
     priority: i32,
-    namespace: Option<String>,
+    queue: Option<String>,
 }
 
 impl Default for SqliteContext {
@@ -33,7 +33,7 @@ impl SqliteContext {
             last_result: None,
             lock_by: None,
             priority: 0,
-            namespace: None,
+            queue: None,
         }
     }
 
@@ -103,12 +103,12 @@ impl SqliteContext {
         self.priority
     }
 
-    pub fn namespace(&self) -> &Option<String> {
-        &self.namespace
+    pub fn queue(&self) -> &Option<String> {
+        &self.queue
     }
 
-    pub fn with_namespace(mut self, namespace: String) -> Self {
-        self.namespace = Some(namespace);
+    pub fn with_queue(mut self, queue: String) -> Self {
+        self.queue = Some(queue);
         self
     }
 }

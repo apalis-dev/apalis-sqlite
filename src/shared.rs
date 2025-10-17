@@ -11,11 +11,12 @@ use std::{
 
 use crate::{
     Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
-    ack::SqliteAck,
+    ack::{LockTaskLayer, SqliteAck},
+    config,
     context::SqliteContext,
-    fetcher::SqliteFetcher,
-    heartbeat,
+    fetcher::SqlitePollFetcher,
     hook::{DbEvent, update_hook_callback},
+    initial_heartbeat, keep_alive,
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
 use apalis_core::{
@@ -36,6 +37,7 @@ use futures::{
 };
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::SqlitePool;
+use tower_layer::Stack;
 use ulid::Ulid;
 
 pub struct SharedSqliteStorage {
@@ -108,7 +110,7 @@ impl SharedSqliteStorage {
                                 if let Some(tx) = instances.get_mut(
                                     task.parts
                                         .ctx
-                                        .namespace()
+                                        .queue()
                                         .as_ref()
                                         .expect("Namespace must be set"),
                                 ) {
@@ -156,9 +158,9 @@ impl<Args> MakeShared<Args> for SharedSqliteStorage {
             .registry
             .try_lock()
             .ok_or(SharedPostgresError::RegistryLocked)?;
-        if r.insert(config.namespace().to_owned(), tx).is_some() {
+        if r.insert(config.queue().to_string(), tx).is_some() {
             return Err(SharedPostgresError::NamespaceExists(
-                config.namespace().to_owned(),
+                config.queue().to_string(),
             ));
         }
         let sink = SqliteSink::new(&self.pool, &config);
@@ -194,12 +196,14 @@ impl<Compact> Stream for SharedFetcher<Compact> {
     }
 }
 
-impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, SharedFetcher>
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode, SharedFetcher>
 where
     Args: Send + 'static + Unpin + Sync,
     Decode: Codec<Args, Compact = String> + 'static + Unpin + Send + Sync,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
+    type Args = Args;
+
     type IdType = Ulid;
 
     type Error = sqlx::Error;
@@ -210,52 +214,45 @@ where
 
     type Codec = Decode;
 
+    type Compact = String;
+
     type Context = SqliteContext;
 
-    type Layer = AcknowledgeLayer<SqliteAck>;
+    type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
-        let worker_type = self.config.namespace().to_owned();
-        let keep_alive = *self.config.keep_alive();
+        let keep_alive_interval = *self.config.keep_alive();
         let pool = self.pool.clone();
         let worker = worker.clone();
+        let config = self.config.clone();
 
         stream::unfold((), move |()| async move {
-            apalis_core::timer::sleep(keep_alive).await;
+            apalis_core::timer::sleep(keep_alive_interval).await;
             Some(((), ()))
         })
-        .then(move |_| {
-            heartbeat(
-                pool.clone(),
-                worker_type.clone(),
-                worker.clone(),
-                Utc::now().timestamp(),
-                "SharedSqliteStorage",
-            )
-        })
+        .then(move |_| keep_alive(pool.clone(), config.clone(), worker.clone()))
         .boxed()
     }
 
     fn middleware(&self) -> Self::Layer {
-        AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()))
+        let lock = LockTaskLayer::new(self.pool.clone());
+        let ack = AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()));
+        Stack::new(lock, ack)
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
-        // TODO: Update lock_by field in the database to worker.name()
-        let _worker_id = worker.name().to_owned();
         let pool = self.pool.clone();
         let worker = worker.clone();
-        let worker_type = self.config.namespace().to_owned();
+        let worker_type = self.config.queue().to_owned();
         // Initial registration heartbeat
         // This ensures that the worker is registered before fetching any tasks
         // This also ensures that the worker is marked as alive in case it crashes
         // before fetching any tasks
         // Subsequent heartbeats are handled in the heartbeat stream
-        let init = heartbeat(
+        let init = initial_heartbeat(
             pool.clone(),
-            worker_type.clone(),
+            self.config.clone(),
             worker.clone(),
-            Utc::now().timestamp(),
             "SharedSqliteStorage",
         );
         let starter = stream::once(init)
@@ -272,7 +269,7 @@ where
             })
             .boxed();
 
-        let eager_fetcher = StreamExt::boxed(SqliteFetcher::<Args, String, Decode>::new(
+        let eager_fetcher = StreamExt::boxed(SqlitePollFetcher::<Args, String, Decode>::new(
             &self.pool,
             &self.config,
             &worker,

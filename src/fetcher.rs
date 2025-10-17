@@ -29,7 +29,7 @@ pub(crate) async fn fetch_next<Args, D: Codec<Args, Compact = String>>(
 where
     D::Error: std::error::Error + Send + Sync + 'static,
 {
-    let job_type = config.namespace();
+    let job_type = config.queue().to_string();
     let buffer_size = config.buffer_size() as i32;
     let worker = worker.name().to_string();
     sqlx::query_file_as!(
@@ -54,8 +54,14 @@ enum StreamState<Args> {
     Empty,
 }
 
-#[pin_project]
+/// Dispatcher for fetching tasks from a SQLite backend via [SqlitePollFetcher]
 pub struct SqliteFetcher<Args, Compact = String, Decode = JsonCodec<String>> {
+    pub _marker: PhantomData<(Args, Compact, Decode)>,
+}
+
+/// Polling-based fetcher for retrieving tasks from a SQLite backend
+#[pin_project]
+pub struct SqlitePollFetcher<Args, Compact = String, Decode = JsonCodec<String>> {
     pool: SqlitePool,
     config: Config,
     wrk: WorkerContext,
@@ -69,7 +75,7 @@ pub struct SqliteFetcher<Args, Compact = String, Decode = JsonCodec<String>> {
     prev_count: Arc<AtomicUsize>,
 }
 
-impl<Args, Compact, Decode> Clone for SqliteFetcher<Args, Compact, Decode> {
+impl<Args, Compact, Decode> Clone for SqlitePollFetcher<Args, Compact, Decode> {
     fn clone(&self) -> Self {
         Self {
             pool: self.pool.clone(),
@@ -83,7 +89,7 @@ impl<Args, Compact, Decode> Clone for SqliteFetcher<Args, Compact, Decode> {
     }
 }
 
-impl<Args: 'static, Decode> SqliteFetcher<Args, String, Decode> {
+impl<Args: 'static, Decode> SqlitePollFetcher<Args, String, Decode> {
     pub fn new(pool: &Pool<Sqlite>, config: &Config, wrk: &WorkerContext) -> Self
     where
         Decode: Codec<Args, Compact = String> + 'static,
@@ -101,7 +107,7 @@ impl<Args: 'static, Decode> SqliteFetcher<Args, String, Decode> {
     }
 }
 
-impl<Args, Decode> Stream for SqliteFetcher<Args, String, Decode>
+impl<Args, Decode> Stream for SqlitePollFetcher<Args, String, Decode>
 where
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
@@ -191,7 +197,7 @@ where
     }
 }
 
-impl<Args, Compact, Decode> SqliteFetcher<Args, Compact, Decode> {
+impl<Args, Compact, Decode> SqlitePollFetcher<Args, Compact, Decode> {
     pub fn take_pending(&mut self) -> VecDeque<SqliteTask<Args>> {
         match &mut self.state {
             StreamState::Buffered(tasks) => std::mem::take(tasks),

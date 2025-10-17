@@ -37,13 +37,54 @@ impl TaskRow {
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
             .with_last_result(self.last_error)
             .with_priority(self.priority.unwrap_or(0) as i32)
-            .with_namespace(
+            .with_queue(
                 self.job_type
                     .ok_or(sqlx::Error::ColumnNotFound("job_type".to_owned()))?,
             )
             .with_lock_at(self.lock_at);
         let args = D::decode(&self.job).map_err(|e| sqlx::Error::Decode(e.into()))?;
         let task = TaskBuilder::new(args)
+            .with_ctx(ctx)
+            .with_attempt(Attempt::new_with_value(
+                self.attempts
+                    .ok_or(sqlx::Error::ColumnNotFound("attempts".to_owned()))?
+                    as usize,
+            ))
+            .with_status(
+                self.status
+                    .ok_or(sqlx::Error::ColumnNotFound("status".to_owned()))
+                    .and_then(|s| {
+                        Status::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
+                    })?,
+            )
+            .with_task_id(
+                self.id
+                    .ok_or(sqlx::Error::ColumnNotFound("task_id".to_owned()))
+                    .and_then(|s| {
+                        TaskId::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
+                    })?,
+            )
+            .run_at_timestamp(
+                self.run_at
+                    .ok_or(sqlx::Error::ColumnNotFound("run_at".to_owned()))?
+                    as u64,
+            );
+        Ok(task.build())
+    }
+    pub fn try_into_task_compact(self) -> Result<SqliteTask<String>, sqlx::Error> {
+        let ctx = SqliteContext::default()
+            .with_done_at(self.done_at)
+            .with_lock_by(self.lock_by)
+            .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
+            .with_last_result(self.last_error)
+            .with_priority(self.priority.unwrap_or(0) as i32)
+            .with_queue(
+                self.job_type
+                    .ok_or(sqlx::Error::ColumnNotFound("job_type".to_owned()))?,
+            )
+            .with_lock_at(self.lock_at);
+
+        let task = TaskBuilder::new(self.job)
             .with_ctx(ctx)
             .with_attempt(Attempt::new_with_value(
                 self.attempts

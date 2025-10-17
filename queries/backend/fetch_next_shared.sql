@@ -1,7 +1,7 @@
 UPDATE Jobs
 SET
-    status = 'Running',
-    lock_at = CURRENT_TIMESTAMP
+    status = 'Queued',
+    lock_at = strftime('%s', 'now')
 WHERE ROWID IN (
     SELECT ROWID
     FROM Jobs
@@ -12,7 +12,7 @@ WHERE ROWID IN (
         AND lock_by IS NULL
         AND (
             run_at IS NULL
-            OR run_at <= CURRENT_TIMESTAMP
+            OR run_at <= strftime('%s', 'now')
         )
         AND ROWID IN (
             SELECT value FROM json_each(?2)

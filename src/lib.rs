@@ -8,22 +8,23 @@ use apalis_core::{
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-use chrono::{DateTime, Utc};
 use futures::{
-    StreamExt,
+    FutureExt, StreamExt, TryStreamExt,
     channel::mpsc,
     future::ready,
     stream::{self, BoxStream, select},
 };
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite};
 use std::ffi::c_void;
+use tower_layer::Stack;
 use ulid::Ulid;
 
 use crate::{
-    ack::SqliteAck,
-    fetcher::{SqliteFetcher, fetch_next},
+    ack::{LockTaskLayer, SqliteAck},
+    fetcher::{SqliteFetcher, SqlitePollFetcher, fetch_next},
     hook::update_hook_callback,
+    reenqueue_orphaned::{reenqueue_orphaned, reenqueue_orphaned_stream},
     sink::SqliteSink,
 };
 
@@ -33,6 +34,7 @@ mod context;
 mod fetcher;
 pub mod from_row;
 mod hook;
+mod reenqueue_orphaned;
 mod shared;
 mod sink;
 mod traits;
@@ -42,8 +44,9 @@ pub use config::Config;
 pub use context::SqliteContext;
 pub use hook::{DbEvent, HookListener};
 pub use shared::{SharedPostgresError, SharedSqliteStorage};
+pub use sqlx::SqlitePool;
 
-type DefaultFetcher<Args> = PhantomData<SqliteFetcher<Args, String, JsonCodec<String>>>;
+type DefaultFetcher<Args> = SqliteFetcher<Args, String, JsonCodec<String>>;
 
 const INSERT_OPERATION: &str = "INSERT";
 const JOBS_TABLE: &str = "Jobs";
@@ -112,14 +115,16 @@ impl SqliteStorage<()> {
 impl<T> SqliteStorage<T> {
     /// Create a new SqliteStorage
     pub fn new(pool: &Pool<Sqlite>) -> Self {
-        let config = Config::default();
+        let config = Config::new(std::any::type_name::<T>());
         Self {
             pool: pool.clone(),
             job_type: PhantomData,
             sink: SqliteSink::new(pool, &config),
             config,
             codec: PhantomData,
-            fetcher: PhantomData,
+            fetcher: fetcher::SqliteFetcher {
+                _marker: PhantomData,
+            },
         }
     }
 
@@ -130,7 +135,9 @@ impl<T> SqliteStorage<T> {
             config: config.clone(),
             codec: PhantomData,
             sink: SqliteSink::new(pool, config),
-            fetcher: PhantomData,
+            fetcher: fetcher::SqliteFetcher {
+                _marker: PhantomData,
+            },
         }
     }
 
@@ -141,7 +148,9 @@ impl<T> SqliteStorage<T> {
             config: config.clone(),
             codec: PhantomData,
             sink: SqliteSink::new(pool, config),
-            fetcher: PhantomData,
+            fetcher: fetcher::SqliteFetcher {
+                _marker: PhantomData,
+            },
         }
     }
 
@@ -176,58 +185,26 @@ impl<T> SqliteStorage<T> {
     }
 }
 
-impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode>
-where
-    Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + 'static,
-    Decode::Error: std::error::Error + Send + Sync + 'static,
-{
-    type IdType = Ulid;
-
-    type Context = SqliteContext;
-
-    type Codec = Decode;
-
-    type Error = sqlx::Error;
-
-    type Stream = SqliteFetcher<Args, String, Decode>;
-
-    type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
-
-    type Layer = AcknowledgeLayer<SqliteAck>;
-
-    fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
-        let worker_type = self.config.namespace().to_owned();
-        let fut = heartbeat(
-            self.pool.clone(),
-            worker_type,
-            worker.clone(),
-            Utc::now().timestamp(),
-            "SqliteStorage",
-        );
-        stream::once(fut).boxed()
-    }
-
-    fn middleware(&self) -> Self::Layer {
-        AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()))
-    }
-
-    fn poll(self, worker: &WorkerContext) -> Self::Stream {
-        SqliteFetcher::new(&self.pool, &self.config, worker)
+impl<T, C, F> SqliteStorage<T, C, F> {
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 
-impl<Args, Decode> Backend<Args> for SqliteStorage<Args, Decode, HookListener>
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode>
 where
     Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + Send + 'static,
+    Decode: Codec<Args, Compact = String> + 'static + Send,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
+    type Args = Args;
     type IdType = Ulid;
 
     type Context = SqliteContext;
 
     type Codec = Decode;
+
+    type Compact = String;
 
     type Error = sqlx::Error;
 
@@ -235,30 +212,112 @@ where
 
     type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
 
-    type Layer = AcknowledgeLayer<SqliteAck>;
+    type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
-        let worker_type = self.config.namespace().to_owned();
-        let fut = heartbeat(
+        let pool = self.pool.clone();
+        let config = self.config.clone();
+        let worker = worker.clone();
+        let keep_alive = stream::unfold((), move |_| {
+            let register = keep_alive(pool.clone(), config.clone(), worker.clone());
+            let interval = apalis_core::timer::Delay::new(*config.keep_alive());
+            interval.then(move |_| register.map(|res| Some((res, ()))))
+        });
+        let reenqueue = reenqueue_orphaned_stream(
             self.pool.clone(),
-            worker_type,
-            worker.clone(),
-            Utc::now().timestamp(),
-            "SqliteStorageWithHook",
-        );
-        stream::once(fut).boxed()
+            self.config.clone(),
+            *self.config.keep_alive(),
+        )
+        .map_ok(|_| ());
+        futures::stream::select(keep_alive, reenqueue).boxed()
     }
 
     fn middleware(&self) -> Self::Layer {
-        AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()))
+        let lock = LockTaskLayer::new(self.pool.clone());
+        let ack = AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()));
+        Stack::new(lock, ack)
+    }
+
+    fn poll(self, worker: &WorkerContext) -> Self::Stream {
+        let worker_type = self.config.queue().to_owned();
+        let fut = initial_heartbeat(
+            self.pool.clone(),
+            self.config().clone(),
+            worker.clone(),
+            "SqliteStorage",
+        );
+        let register = stream::once(fut.map(|_| Ok(None)));
+        register
+            .chain(SqlitePollFetcher::<Args, String, Decode>::new(
+                &self.pool,
+                &self.config,
+                worker,
+            ))
+            .boxed()
+    }
+}
+
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode, HookListener>
+where
+    Args: Send + 'static + Unpin,
+    Decode: Codec<Args, Compact = String> + Send + 'static,
+    Decode::Error: std::error::Error + Send + Sync + 'static,
+{
+    type Args = Args;
+    type IdType = Ulid;
+
+    type Context = SqliteContext;
+
+    type Codec = Decode;
+
+    type Compact = String;
+
+    type Error = sqlx::Error;
+
+    type Stream = TaskStream<SqliteTask<Args>, sqlx::Error>;
+
+    type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
+
+    type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
+
+    fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
+        let worker_type = self.config.queue().to_owned();
+        let pool = self.pool.clone();
+        let config = self.config.clone();
+        let worker = worker.clone();
+        let keep_alive = stream::unfold((), move |_| {
+            let register = keep_alive(pool.clone(), config.clone(), worker.clone());
+            let interval = apalis_core::timer::Delay::new(*config.keep_alive());
+            interval.then(move |_| register.map(|res| Some((res, ()))))
+        });
+        let reenqueue = reenqueue_orphaned_stream(
+            self.pool.clone(),
+            self.config.clone(),
+            *self.config.keep_alive(),
+        )
+        .map_ok(|_| ());
+        futures::stream::select(keep_alive, reenqueue).boxed()
+    }
+
+    fn middleware(&self) -> Self::Layer {
+        let lock = LockTaskLayer::new(self.pool.clone());
+        let ack = AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()));
+        Stack::new(lock, ack)
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
         let pool = self.pool.clone();
         let config = self.config.clone();
         let worker = worker.clone();
-        let eager_fetcher: SqliteFetcher<Args, String, Decode> =
-            SqliteFetcher::new(&self.pool, &self.config, &worker);
+        let register_worker = initial_heartbeat(
+            self.pool.clone(),
+            self.config.clone(),
+            worker.clone(),
+            "SqliteStorageWithHook",
+        );
+        let register_worker = stream::once(register_worker.map(|_| Ok(None)));
+        let eager_fetcher: SqlitePollFetcher<Args, String, Decode> =
+            SqlitePollFetcher::new(&self.pool, &self.config, &worker);
         let lazy_fetcher = self
             .fetcher
             .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))
@@ -273,35 +332,65 @@ where
                 Err(e) => Err(e),
             });
 
-        select(lazy_fetcher, eager_fetcher).boxed()
+        register_worker
+            .chain(select(lazy_fetcher, eager_fetcher))
+            .boxed()
     }
 }
 
-pub(crate) async fn heartbeat(
+pub async fn initial_heartbeat(
     pool: SqlitePool,
-    worker_type: String,
+    config: Config,
     worker: WorkerContext,
-    last_seen: i64,
-    backend_type: &str,
+    storage_type: &str,
 ) -> Result<(), sqlx::Error> {
-    let last_seen = DateTime::from_timestamp(last_seen, 0).ok_or(sqlx::Error::Io(
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid Timestamp"),
-    ))?;
-    let svc = worker.get_service().to_owned();
+    reenqueue_orphaned(pool.clone(), config.clone()).await?;
+    register_worker(pool, config, worker, storage_type).await?;
+    Ok(())
+}
+
+pub(crate) async fn keep_alive(
+    pool: SqlitePool,
+    config: Config,
+    worker: WorkerContext,
+) -> Result<(), sqlx::Error> {
     let worker = worker.name().to_owned();
+    let queue = config.queue().to_string();
+    let res = sqlx::query_file!("queries/backend/keep_alive.sql", worker, queue)
+        .execute(&pool)
+        .await?;
+    if res.rows_affected() == 1 {
+        return Err(sqlx::Error::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "WORKER_DOES_NOT_EXIST",
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) async fn register_worker(
+    pool: SqlitePool,
+    config: Config,
+    worker: WorkerContext,
+    storage_type: &str,
+) -> Result<(), sqlx::Error> {
+    let worker_id = worker.name().to_owned();
+    let queue = config.queue().to_string();
+    let layers = worker.get_service().to_owned();
+    let keep_alive = config.keep_alive().as_secs() as i64;
     let res = sqlx::query_file!(
-        "queries/backend/heartbeat.sql",
-        worker,
-        worker_type,
-        backend_type,
-        svc,
-        last_seen
+        "queries/backend/register_worker.sql",
+        worker_id,
+        queue,
+        storage_type,
+        layers,
+        keep_alive,
     )
     .execute(&pool)
     .await?;
     if res.rows_affected() == 0 {
         return Err(sqlx::Error::Io(std::io::Error::new(
-            std::io::ErrorKind::AddrInUse,
+            std::io::ErrorKind::AlreadyExists,
             "WORKER_ALREADY_EXISTS",
         )));
     }
@@ -368,7 +457,7 @@ mod tests {
         let lazy_strategy = StrategyBuilder::new()
             .apply(IntervalStrategy::new(Duration::from_secs(5)))
             .build();
-        let config = Config::default()
+        let config = Config::new("rango-tango-queue")
             .with_poll_interval(lazy_strategy)
             .set_buffer_size(5);
         let backend = SqliteStorage::new_with_hook(&pool, &config).await;

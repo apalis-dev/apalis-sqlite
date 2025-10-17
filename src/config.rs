@@ -1,6 +1,13 @@
 use std::time::Duration;
 
-use apalis_core::backend::poll_strategy::{IntervalStrategy, MultiStrategy, StrategyBuilder};
+use apalis_core::backend::{
+    Backend, ConfigExt,
+    poll_strategy::{BackoffConfig, IntervalStrategy, MultiStrategy, StrategyBuilder},
+    queue::Queue,
+};
+use ulid::Ulid;
+
+use crate::{SqliteContext, SqliteStorage};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -8,7 +15,7 @@ pub struct Config {
     buffer_size: usize,
     poll_strategy: MultiStrategy,
     reenqueue_orphaned_after: Duration,
-    namespace: String,
+    queue: Queue,
     ack: bool,
 }
 
@@ -18,19 +25,25 @@ impl Default for Config {
             keep_alive: Duration::from_secs(30),
             buffer_size: 10,
             poll_strategy: StrategyBuilder::new()
-                .apply(IntervalStrategy::new(Duration::from_millis(100)))
+                .apply(
+                    IntervalStrategy::new(Duration::from_millis(100))
+                        .with_backoff(BackoffConfig::default()),
+                )
                 .build(),
             reenqueue_orphaned_after: Duration::from_secs(300), // 5 minutes
-            namespace: String::from("apalis::sqlite"),
+            queue: Queue::from("default"),
             ack: true,
         }
     }
 }
 
 impl Config {
-    /// Create a new config with a jobs namespace
-    pub fn new(namespace: &str) -> Self {
-        Config::default().set_namespace(namespace)
+    /// Create a new config with a jobs queue
+    pub fn new(queue: &str) -> Self {
+        Config {
+            queue: Queue::from(queue),
+            ..Default::default()
+        }
     }
 
     /// Interval between database poll queries
@@ -54,14 +67,6 @@ impl Config {
     /// Defaults to 10
     pub fn set_buffer_size(mut self, buffer_size: usize) -> Self {
         self.buffer_size = buffer_size;
-        self
-    }
-
-    /// Set the namespace to consume and push jobs to
-    ///
-    /// Defaults to "apalis::sql"
-    pub fn set_namespace(mut self, namespace: &str) -> Self {
-        self.namespace = namespace.to_string();
         self
     }
 
@@ -90,14 +95,14 @@ impl Config {
         &mut self.poll_strategy
     }
 
-    /// Gets a reference to the namespace.
-    pub fn namespace(&self) -> &String {
-        &self.namespace
+    /// Gets a reference to the queue.
+    pub fn queue(&self) -> &Queue {
+        &self.queue
     }
 
-    /// Gets a mutable reference to the namespace.
-    pub fn namespace_mut(&mut self) -> &mut String {
-        &mut self.namespace
+    /// Gets a mutable reference to the queue.
+    pub fn queue_mut(&mut self) -> &mut Queue {
+        &mut self.queue
     }
 
     /// Gets the reenqueue_orphaned_after duration.
@@ -126,5 +131,15 @@ impl Config {
     pub fn set_ack(mut self, auto_ack: bool) -> Self {
         self.ack = auto_ack;
         self
+    }
+}
+
+impl<Args: Sync, D, F> ConfigExt for SqliteStorage<Args, D, F>
+where
+    SqliteStorage<Args, D, F>:
+        Backend<Context = SqliteContext, Compact = String, IdType = Ulid, Error = sqlx::Error>,
+{
+    fn get_queue(&self) -> Queue {
+        self.config.queue.clone()
     }
 }

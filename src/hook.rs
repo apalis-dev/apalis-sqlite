@@ -3,6 +3,7 @@ use futures::{Stream, StreamExt};
 use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
 #[derive(Debug)]
@@ -50,6 +51,14 @@ pub(crate) extern "C" fn update_hook_callback(
         let db = CStr::from_ptr(db_name).to_string_lossy().to_string();
         let table = CStr::from_ptr(table_name).to_string_lossy().to_string();
 
+        log::debug!(
+            "DB Event - Operation: {}, DB: {}, Table: {}, RowID: {}",
+            op_str,
+            db,
+            table,
+            rowid
+        );
+
         // Recover sender from raw pointer
         let tx = &mut *(arg as *mut mpsc::UnboundedSender<DbEvent>);
 
@@ -63,12 +72,15 @@ pub(crate) extern "C" fn update_hook_callback(
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct HookListener {
-    rx: UnboundedReceiver<DbEvent>,
+    rx: Arc<Mutex<UnboundedReceiver<DbEvent>>>,
 }
 impl HookListener {
     pub fn new(rx: UnboundedReceiver<DbEvent>) -> Self {
-        Self { rx }
+        Self {
+            rx: Arc::new(Mutex::new(rx)),
+        }
     }
 }
 
@@ -76,6 +88,9 @@ impl Stream for HookListener {
     type Item = DbEvent;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.rx.poll_next_unpin(cx)
+        self.rx
+            .try_lock()
+            .map(|mut rx| rx.poll_next_unpin(cx))
+            .unwrap_or(Poll::Pending)
     }
 }

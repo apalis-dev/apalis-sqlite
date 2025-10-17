@@ -1,5 +1,6 @@
 use std::{
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -7,13 +8,16 @@ use apalis_core::{
     backend::codec::{Codec, json::JsonCodec},
     error::BoxDynError,
 };
-use futures::Sink;
+use futures::{
+    FutureExt, Sink, TryFutureExt,
+    future::{BoxFuture, Shared},
+};
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
 use crate::{SqliteStorage, SqliteTask, config::Config};
 
-type FlushFuture = Pin<Box<dyn Future<Output = Result<(), sqlx::Error>> + Send>>;
+type FlushFuture = BoxFuture<'static, Result<(), Arc<sqlx::Error>>>;
 
 #[pin_project::pin_project]
 pub struct SqliteSink<Args, Compact = String, Codec = JsonCodec<String>> {
@@ -21,7 +25,7 @@ pub struct SqliteSink<Args, Compact = String, Codec = JsonCodec<String>> {
     config: Config,
     buffer: Vec<SqliteTask<Compact>>,
     #[pin]
-    flush_future: Option<FlushFuture>,
+    flush_future: Option<Shared<FlushFuture>>,
     _marker: std::marker::PhantomData<(Args, Codec)>,
 }
 
@@ -41,9 +45,8 @@ pub(crate) async fn push_tasks(
     pool: SqlitePool,
     cfg: Config,
     buffer: Vec<SqliteTask<String>>,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), Arc<sqlx::Error>> {
     let mut tx = pool.begin().await?;
-    let job_type = cfg.namespace();
 
     for task in buffer {
         let id = task
@@ -55,6 +58,11 @@ pub(crate) async fn push_tasks(
         let max_attempts = task.parts.ctx.max_attempts();
         let priority = task.parts.ctx.priority();
         let args = task.args;
+        // Use specified queue if specified, otherwise use default
+        let job_type = match task.parts.queue {
+            Some(ref queue) => queue.to_string(),
+            None => cfg.queue().to_string(),
+        };
         sqlx::query_file!(
             "queries/task/sink.sql",
             args,
@@ -120,19 +128,19 @@ where
             let config = this.config.clone();
             let buffer = std::mem::take(&mut this.sink.buffer);
             let sink_fut = push_tasks(pool, config, buffer);
-            this.sink.flush_future = Some(Box::pin(sink_fut));
+            this.sink.flush_future = Some((Box::pin(sink_fut) as FlushFuture).shared());
         }
 
         // Poll the existing future
         if let Some(mut fut) = this.sink.flush_future.take() {
-            match fut.as_mut().poll(cx) {
+            match fut.poll_unpin(cx) {
                 Poll::Ready(Ok(())) => {
                     // Future completed successfully, don't put it back
                     Poll::Ready(Ok(()))
                 }
                 Poll::Ready(Err(e)) => {
                     // Future completed with error, don't put it back
-                    Poll::Ready(Err(e))
+                    Poll::Ready(Err(Arc::into_inner(e).unwrap()))
                 }
                 Poll::Pending => {
                     // Future is still pending, put it back and return Pending
