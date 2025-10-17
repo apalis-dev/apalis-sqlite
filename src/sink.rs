@@ -4,10 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use apalis_core::{
-    backend::codec::{Codec, json::JsonCodec},
-    error::BoxDynError,
-};
+use apalis_core::backend::codec::Codec;
 use futures::{
     FutureExt, Sink,
     future::{BoxFuture, Shared},
@@ -15,12 +12,12 @@ use futures::{
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
-use crate::{SqliteStorage, SqliteTask, config::Config};
+use crate::{CompactType, SqliteStorage, SqliteTask, config::Config};
 
 type FlushFuture = BoxFuture<'static, Result<(), Arc<sqlx::Error>>>;
 
 #[pin_project::pin_project]
-pub struct SqliteSink<Args, Compact = String, Codec = JsonCodec<String>> {
+pub struct SqliteSink<Args, Compact, Codec> {
     pool: SqlitePool,
     config: Config,
     buffer: Vec<SqliteTask<Compact>>,
@@ -44,10 +41,9 @@ impl<Args, Compact, Codec> Clone for SqliteSink<Args, Compact, Codec> {
 pub async fn push_tasks(
     pool: SqlitePool,
     cfg: Config,
-    buffer: Vec<SqliteTask<String>>,
+    buffer: Vec<SqliteTask<CompactType>>,
 ) -> Result<(), Arc<sqlx::Error>> {
     let mut tx = pool.begin().await?;
-
     for task in buffer {
         let id = task
             .parts
@@ -95,9 +91,8 @@ impl<Args, Compact, Codec> SqliteSink<Args, Compact, Codec> {
 impl<Args, Encode, Fetcher> Sink<SqliteTask<Args>> for SqliteStorage<Args, Encode, Fetcher>
 where
     Args: Send + Sync + 'static,
-    Encode: Codec<Args, Compact = String>,
+    Encode: Codec<Args, Compact = CompactType>,
     Encode::Error: std::error::Error + Send + Sync + 'static,
-    Encode::Error: Into<BoxDynError>,
 {
     type Error = sqlx::Error;
 

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE\n    Jobs\nSET\n    status = ?4,\n    attempts = ?2,\n    last_result = ?3,\n    done_at = strftime('%s', 'now')\nWHERE\n    id = ?1\n    AND lock_by = ?5\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "90406ca41cb79e68f66a300730f85ad7b0a3ddc713341adcbbc959021082c8e9"
+}

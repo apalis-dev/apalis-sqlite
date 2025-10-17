@@ -140,8 +140,7 @@ use std::{fmt, marker::PhantomData};
 
 use apalis_core::{
     backend::{
-        Backend, TaskStream,
-        codec::{Codec, json::JsonCodec},
+        codec::{json::JsonCodec, Codec }, Backend, TaskStream
     },
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
@@ -186,19 +185,23 @@ pub use context::SqliteContext;
 pub use shared::{SharedPostgresError, SharedSqliteStorage};
 pub use sqlx::SqlitePool;
 
-type DefaultFetcher<Args> = SqliteFetcher<Args, String, JsonCodec<String>>;
+#[cfg(feature = "json")]
+pub type CompactType = serde_json::Value;
+
+#[cfg(feature = "bytes")]
+pub type CompactType = Vec<u8>;
 
 const INSERT_OPERATION: &str = "INSERT";
 const JOBS_TABLE: &str = "Jobs";
 
 #[pin_project::pin_project]
-pub struct SqliteStorage<T, C = JsonCodec<String>, Fetcher = DefaultFetcher<T>> {
+pub struct SqliteStorage<T, C, Fetcher> {
     pool: Pool<Sqlite>,
     job_type: PhantomData<T>,
     config: Config,
     codec: PhantomData<C>,
     #[pin]
-    sink: SqliteSink<T, String, C>,
+    sink: SqliteSink<T, CompactType, C>,
     #[pin]
     fetcher: Fetcher,
 }
@@ -227,7 +230,7 @@ impl<T, C, F: Clone> Clone for SqliteStorage<T, C, F> {
     }
 }
 
-impl SqliteStorage<()> {
+impl SqliteStorage<(), (), ()> {
     /// Perform migrations for storage
     #[cfg(feature = "migrate")]
     pub async fn setup(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
@@ -248,15 +251,29 @@ impl SqliteStorage<()> {
     /// Get sqlite migrations without running them
     #[cfg(feature = "migrate")]
     pub fn migrations() -> sqlx::migrate::Migrator {
-        sqlx::migrate!("./migrations")
+        if cfg!(feature = "bytes") && cfg!(not(feature = "json")) {
+            sqlx::migrate!("./migrations/bytes")
+        } else if cfg!(feature = "json") && cfg!(not(feature = "bytes")) {
+            sqlx::migrate!("./migrations/json")
+        } else {
+            panic!(
+                "One of either the 'json' or 'bytes' feature must be enabled for migrations to work."
+            );
+        }
     }
 }
 
-impl<T> SqliteStorage<T> {
+impl<T> SqliteStorage<T, (), ()> {
     /// Create a new SqliteStorage
-    pub fn new(pool: &Pool<Sqlite>) -> Self {
+    pub fn new(
+        pool: &Pool<Sqlite>,
+    ) -> SqliteStorage<
+        T,
+        JsonCodec<CompactType>,
+        fetcher::SqliteFetcher<T, CompactType, JsonCodec<CompactType>>,
+    > {
         let config = Config::new(std::any::type_name::<T>());
-        Self {
+        SqliteStorage {
             pool: pool.clone(),
             job_type: PhantomData,
             sink: SqliteSink::new(pool, &config),
@@ -268,7 +285,10 @@ impl<T> SqliteStorage<T> {
         }
     }
 
-    pub fn new_with_codec<Codec>(pool: &Pool<Sqlite>, config: &Config) -> SqliteStorage<T, Codec> {
+    pub fn new_with_codec<Codec>(
+        pool: &Pool<Sqlite>,
+        config: &Config,
+    ) -> SqliteStorage<T, Codec, fetcher::SqliteFetcher<T, CompactType, Codec>> {
         SqliteStorage {
             pool: pool.clone(),
             job_type: PhantomData,
@@ -281,8 +301,15 @@ impl<T> SqliteStorage<T> {
         }
     }
 
-    pub fn new_with_config(pool: &Pool<Sqlite>, config: &Config) -> Self {
-        Self {
+    pub fn new_with_config(
+        pool: &Pool<Sqlite>,
+        config: &Config,
+    ) -> SqliteStorage<
+        T,
+        JsonCodec<CompactType>,
+        fetcher::SqliteFetcher<T, CompactType, JsonCodec<CompactType>>,
+    > {
+        SqliteStorage {
             pool: pool.clone(),
             job_type: PhantomData,
             config: config.clone(),
@@ -297,7 +324,21 @@ impl<T> SqliteStorage<T> {
     pub fn new_with_callback(
         pool: &Pool<Sqlite>,
         config: &Config,
-    ) -> SqliteStorage<T, JsonCodec<String>, HookCallbackListener> {
+    ) -> SqliteStorage<T, JsonCodec<CompactType>, HookCallbackListener> {
+        SqliteStorage {
+            pool: pool.clone(),
+            job_type: PhantomData,
+            config: config.clone(),
+            codec: PhantomData,
+            sink: SqliteSink::new(&pool, config),
+            fetcher: HookCallbackListener,
+        }
+    }
+
+    pub fn new_with_codec_callback<Codec>(
+        pool: &Pool<Sqlite>,
+        config: &Config,
+    ) -> SqliteStorage<T, Codec, HookCallbackListener> {
         SqliteStorage {
             pool: pool.clone(),
             job_type: PhantomData,
@@ -315,10 +356,10 @@ impl<T, C, F> SqliteStorage<T, C, F> {
     }
 }
 
-impl<Args, Decode> Backend for SqliteStorage<Args, Decode>
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode, SqliteFetcher<Args, CompactType, Decode>>
 where
     Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + 'static + Send,
+    Decode: Codec<Args, Compact = CompactType> + 'static + Send,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
     type Args = Args;
@@ -328,7 +369,7 @@ where
 
     type Codec = Decode;
 
-    type Compact = String;
+    type Compact = CompactType;
 
     type Error = sqlx::Error;
 
@@ -367,7 +408,7 @@ where
         );
         let register = stream::once(fut.map(|_| Ok(None)));
         register
-            .chain(SqlitePollFetcher::<Args, String, Decode>::new(
+            .chain(SqlitePollFetcher::<Args, CompactType, Decode>::new(
                 &self.pool,
                 &self.config,
                 worker,
@@ -379,7 +420,7 @@ where
 impl<Args, Decode> Backend for SqliteStorage<Args, Decode, HookCallbackListener>
 where
     Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + Send + 'static,
+    Decode: Codec<Args, Compact = CompactType> + Send + 'static,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
     type Args = Args;
@@ -389,7 +430,7 @@ where
 
     type Codec = Decode;
 
-    type Compact = String;
+    type Compact = CompactType;
 
     type Error = sqlx::Error;
 
@@ -454,7 +495,7 @@ where
                 })
                 .map(|_| Ok(None)),
         );
-        let eager_fetcher: SqlitePollFetcher<Args, String, Decode> =
+        let eager_fetcher: SqlitePollFetcher<Args, CompactType, Decode> =
             SqlitePollFetcher::new(&self.pool, &self.config, &worker);
         let lazy_fetcher = listener
             .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))

@@ -5,18 +5,18 @@ use apalis_core::{
     task::{attempt::Attempt, builder::TaskBuilder, status::Status, task_id::TaskId},
 };
 
-use crate::{SqliteTask, context::SqliteContext};
+use crate::{CompactType, SqliteTask, context::SqliteContext};
 
 #[derive(Debug)]
 pub(crate) struct TaskRow {
-    pub(crate) job: String,
+    pub(crate) job: CompactType,
     pub(crate) id: Option<String>,
     pub(crate) job_type: Option<String>,
     pub(crate) status: Option<String>,
     pub(crate) attempts: Option<i64>,
     pub(crate) max_attempts: Option<i64>,
     pub(crate) run_at: Option<i64>,
-    pub(crate) last_error: Option<String>,
+    pub(crate) last_result: Option<String>,
     pub(crate) lock_at: Option<i64>,
     pub(crate) lock_by: Option<String>,
     pub(crate) done_at: Option<i64>,
@@ -25,7 +25,7 @@ pub(crate) struct TaskRow {
 }
 
 impl TaskRow {
-    pub fn try_into_task<D: Codec<Args, Compact = String>, Args>(
+    pub fn try_into_task<D: Codec<Args, Compact = CompactType>, Args>(
         self,
     ) -> Result<SqliteTask<Args>, sqlx::Error>
     where
@@ -35,7 +35,7 @@ impl TaskRow {
             .with_done_at(self.done_at)
             .with_lock_by(self.lock_by)
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
-            .with_last_result(self.last_error)
+            .with_last_result(self.last_result)
             .with_priority(self.priority.unwrap_or(0) as i32)
             .with_queue(
                 self.job_type
@@ -71,12 +71,12 @@ impl TaskRow {
             );
         Ok(task.build())
     }
-    pub fn try_into_task_compact(self) -> Result<SqliteTask<String>, sqlx::Error> {
+    pub fn try_into_task_compact(self) -> Result<SqliteTask<CompactType>, sqlx::Error> {
         let ctx = SqliteContext::default()
             .with_done_at(self.done_at)
             .with_lock_by(self.lock_by)
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
-            .with_last_result(self.last_error)
+            .with_last_result(self.last_result)
             .with_priority(self.priority.unwrap_or(0) as i32)
             .with_queue(
                 self.job_type

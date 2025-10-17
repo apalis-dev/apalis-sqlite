@@ -9,12 +9,14 @@ license = "MIT"
 description = "Background task processing for rust using apalis and sqlite"
 
 [features]
-default = ["migrate"]
+default = ["migrate", "json"]
 migrate = ["sqlx/migrate", "sqlx/macros"]
 async-std-comp = ["async-std", "sqlx/runtime-async-std-rustls"]
 async-std-comp-native-tls = ["async-std", "sqlx/runtime-async-std-native-tls"]
 tokio-comp = ["tokio", "sqlx/runtime-tokio-rustls"]
 tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio-native-tls"]
+bytes = []
+json = ["sqlx/json"]
 
 [dependencies.sqlx]
 version = "0.8.6"
@@ -23,7 +25,7 @@ features = ["chrono", "sqlite"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1" }
 apalis-core = { version = "1.0.0-alpha.3", default-features = false, features = [
     "sleep",
     "json",
@@ -42,7 +44,9 @@ tower-service = "0.3.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.3", features = ["test-utils"], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
+apalis-core = { version = "1.0.0-alpha.3", features = [
+    "test-utils",
+], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 
 [package.metadata.docs.rs]

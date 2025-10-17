@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n    *\nFROM\n    Workers\nWHERE\n    worker_type = ?1\nORDER BY\n    last_seen DESC\nLIMIT\n    ?2 OFFSET ?3\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "worker_type",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "storage_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "layers",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_seen",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "started_at",
+        "ordinal": 5,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "7bd7de027caa72c93f7f89bd24a5a78685df4c262c2a13eafd9803c3672dcd10"
+}

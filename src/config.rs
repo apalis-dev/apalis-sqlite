@@ -7,7 +7,7 @@ use apalis_core::backend::{
 };
 use ulid::Ulid;
 
-use crate::{SqliteContext, SqliteStorage};
+use crate::{CompactType, SqliteContext, SqliteStorage};
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -137,7 +137,7 @@ impl Config {
 impl<Args: Sync, D, F> ConfigExt for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = String, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn get_queue(&self) -> Queue {
         self.config.queue.clone()

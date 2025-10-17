@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE Jobs\nSET\n    status = 'Queued',\n    lock_by = ?1,\n    lock_at = strftime('%s', 'now')\nWHERE\n    ROWID IN (\n        SELECT ROWID\n        FROM Jobs\n        WHERE job_type = ?2\n            AND (\n                    (status = 'Pending' AND lock_by IS NULL) \n                    OR \n                    (status = 'Failed' AND attempts < max_attempts)\n                )\n            AND (run_at IS NULL OR run_at <= strftime('%s', 'now'))\n        ORDER BY priority DESC, run_at ASC, id ASC\n        LIMIT ?3\n    )\nRETURNING *\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "job",
+        "ordinal": 0,
+        "type_info": "Blob"
+      },
+      {
+        "name": "id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "job_type",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "attempts",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "max_attempts",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "run_at",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "last_result",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "lock_at",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "lock_by",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "done_at",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "priority",
+        "ordinal": 11,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d7aefe54cd7388c208fff5b946390f217b575f0ca464a5faddd0fe2d51793983"
+}

@@ -6,7 +6,7 @@ SET
     lock_by = NULL,
     lock_at = NULL,
     attempts = attempts + 1,
-    last_error = '{"Err": "Re-enqueued due to worker heartbeat timeout."}'
+    last_result = '{"Err": "Re-enqueued due to worker heartbeat timeout."}'
 WHERE
     id IN (
         SELECT

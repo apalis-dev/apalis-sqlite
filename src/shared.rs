@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
+    CompactType, Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
     ack::{LockTaskLayer, SqliteAck},
     callback::{DbEvent, update_hook_callback},
     context::SqliteContext,
@@ -19,11 +19,7 @@ use crate::{
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
 use apalis_core::{
-    backend::{
-        Backend, TaskStream,
-        codec::{Codec, json::JsonCodec},
-        shared::MakeShared,
-    },
+    backend::{Backend, TaskStream, codec::Codec, shared::MakeShared},
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
 use futures::{
@@ -38,15 +34,16 @@ use sqlx::SqlitePool;
 use tower_layer::Stack;
 use ulid::Ulid;
 
-pub struct SharedSqliteStorage {
+pub struct SharedSqliteStorage<Decode> {
     pool: SqlitePool,
-    registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<String>>>>>,
+    registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<CompactType>>>>>,
     drive: Shared<BoxFuture<'static, ()>>,
+    _marker: PhantomData<Decode>,
 }
 
-impl SharedSqliteStorage {
+impl<Decode: Codec<CompactType, Compact = CompactType>> SharedSqliteStorage<Decode> {
     pub fn new(pool: SqlitePool) -> Self {
-        let registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<String>>>>> =
+        let registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<CompactType>>>>> =
             Arc::new(Mutex::new(HashMap::default()));
         let p = pool.clone();
         let instances = registry.clone();
@@ -93,7 +90,7 @@ impl SharedSqliteStorage {
                             buffer_size,
                         )
                         .fetch(&mut *tx)
-                        .map(|r| r?.try_into_task::<JsonCodec<String>, String>())
+                        .map(|r| r?.try_into_task_compact())
                         .try_collect()
                         .await?;
                         tx.commit().await?;
@@ -126,6 +123,7 @@ impl SharedSqliteStorage {
             .boxed()
             .shared(),
             registry,
+            _marker: PhantomData,
         }
     }
 }
@@ -137,8 +135,10 @@ pub enum SharedPostgresError {
     RegistryLocked,
 }
 
-impl<Args> MakeShared<Args> for SharedSqliteStorage {
-    type Backend = SqliteStorage<Args, JsonCodec<String>, SharedFetcher>;
+impl<Args, Decode: Codec<Args, Compact = CompactType>> MakeShared<Args>
+    for SharedSqliteStorage<Decode>
+{
+    type Backend = SqliteStorage<Args, Decode, SharedFetcher<CompactType>>;
     type Config = Config;
     type MakeError = SharedPostgresError;
     fn make_shared(&mut self) -> Result<Self::Backend, Self::MakeError>
@@ -176,7 +176,7 @@ impl<Args> MakeShared<Args> for SharedSqliteStorage {
     }
 }
 
-pub struct SharedFetcher<Compact = String> {
+pub struct SharedFetcher<Compact> {
     poller: Shared<BoxFuture<'static, ()>>,
     receiver: Receiver<SqliteTask<Compact>>,
 }
@@ -194,10 +194,10 @@ impl<Compact> Stream for SharedFetcher<Compact> {
     }
 }
 
-impl<Args, Decode> Backend for SqliteStorage<Args, Decode, SharedFetcher>
+impl<Args, Decode> Backend for SqliteStorage<Args, Decode, SharedFetcher<CompactType>>
 where
     Args: Send + 'static + Unpin + Sync,
-    Decode: Codec<Args, Compact = String> + 'static + Unpin + Send + Sync,
+    Decode: Codec<Args, Compact = CompactType> + 'static + Unpin + Send + Sync,
     Decode::Error: std::error::Error + Send + Sync + 'static,
 {
     type Args = Args;
@@ -212,7 +212,7 @@ where
 
     type Codec = Decode;
 
-    type Compact = String;
+    type Compact = CompactType;
 
     type Context = SqliteContext;
 
@@ -266,7 +266,7 @@ where
             })
             .boxed();
 
-        let eager_fetcher = StreamExt::boxed(SqlitePollFetcher::<Args, String, Decode>::new(
+        let eager_fetcher = StreamExt::boxed(SqlitePollFetcher::<Args, CompactType, Decode>::new(
             &self.pool,
             &self.config,
             &worker,

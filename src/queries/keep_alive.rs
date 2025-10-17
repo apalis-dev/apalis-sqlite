@@ -17,7 +17,7 @@ pub async fn keep_alive(
     let res = sqlx::query_file!("queries/backend/keep_alive.sql", worker, queue)
         .execute(&pool)
         .await?;
-    if res.rows_affected() == 1 {
+    if res.rows_affected() == 0 {
         return Err(sqlx::Error::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "WORKER_DOES_NOT_EXIST",

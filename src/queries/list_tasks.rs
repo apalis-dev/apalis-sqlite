@@ -1,17 +1,17 @@
 use apalis_core::{
-    backend::{Backend, Filter, ListAllTasks, ListTasks, codec::json::JsonCodec},
+    backend::{Backend, Filter, ListAllTasks, ListTasks, codec::Codec},
     task::{Task, status::Status},
 };
-use serde::{Serialize, de::DeserializeOwned};
 use ulid::Ulid;
 
-use crate::{SqliteContext, SqliteStorage, SqliteTask, from_row::TaskRow};
+use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::TaskRow};
 
 impl<Args, D, F> ListTasks<Args> for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = String, IdType = Ulid, Error = sqlx::Error>,
-    Args: Serialize + DeserializeOwned,
+        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    D: Codec<Args, Compact = CompactType>,
+    D::Error: std::error::Error + Send + Sync + 'static,
 {
     fn list_tasks(
         &self,
@@ -39,7 +39,7 @@ where
             .fetch_all(&pool)
             .await?
             .into_iter()
-            .map(|r| r.try_into_task::<JsonCodec<String>, _>())
+            .map(|r| r.try_into_task::<D, _>())
             .collect::<Result<Vec<_>, _>>()?;
             Ok(tasks)
         }
@@ -49,7 +49,7 @@ where
 impl<Args, D, F> ListAllTasks for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = String, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn list_all_tasks(
         &self,

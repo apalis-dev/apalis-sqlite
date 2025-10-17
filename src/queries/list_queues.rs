@@ -1,7 +1,7 @@
 use apalis_core::backend::{Backend, ListQueues, QueueInfo};
 use ulid::Ulid;
 
-use crate::{SqliteContext, SqliteStorage};
+use crate::{CompactType, SqliteContext, SqliteStorage};
 
 struct QueueInfoRow {
     name: String,
@@ -24,7 +24,7 @@ impl From<QueueInfoRow> for QueueInfo {
 impl<Args, D, F> ListQueues for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = String, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn list_queues(&self) -> impl Future<Output = Result<Vec<QueueInfo>, Self::Error>> + Send {
         let pool = self.pool.clone();

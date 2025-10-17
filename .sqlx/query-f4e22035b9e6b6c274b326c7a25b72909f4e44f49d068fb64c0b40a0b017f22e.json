@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE\n    Workers\nSET\n    last_seen = strftime('%s', 'now')\nWHERE\n    id = $1 AND worker_type = $2;\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "f4e22035b9e6b6c274b326c7a25b72909f4e44f49d068fb64c0b40a0b017f22e"
+}

@@ -8,7 +8,7 @@ use std::{
 
 use apalis_core::{
     backend::{
-        codec::{Codec, json::JsonCodec},
+        codec::{Codec, },
         poll_strategy::{PollContext, PollStrategyExt},
     },
     task::Task,
@@ -19,9 +19,9 @@ use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use ulid::Ulid;
 
-use crate::{SqliteTask, config::Config, context::SqliteContext, from_row::TaskRow};
+use crate::{CompactType, SqliteTask, config::Config, context::SqliteContext, from_row::TaskRow};
 
-pub async fn fetch_next<Args, D: Codec<Args, Compact = String>>(
+pub async fn fetch_next<Args, D: Codec<Args, Compact = CompactType>>(
     pool: SqlitePool,
     config: Config,
     worker: WorkerContext,
@@ -55,13 +55,14 @@ enum StreamState<Args> {
 }
 
 /// Dispatcher for fetching tasks from a SQLite backend via [SqlitePollFetcher]
-pub struct SqliteFetcher<Args, Compact = String, Decode = JsonCodec<String>> {
+#[derive(Clone, Debug)]
+pub struct SqliteFetcher<Args, Compact, Decode> {
     pub _marker: PhantomData<(Args, Compact, Decode)>,
 }
 
 /// Polling-based fetcher for retrieving tasks from a SQLite backend
 #[pin_project]
-pub struct SqlitePollFetcher<Args, Compact = String, Decode = JsonCodec<String>> {
+pub struct SqlitePollFetcher<Args, Compact, Decode> {
     pool: SqlitePool,
     config: Config,
     wrk: WorkerContext,
@@ -89,10 +90,10 @@ impl<Args, Compact, Decode> Clone for SqlitePollFetcher<Args, Compact, Decode> {
     }
 }
 
-impl<Args: 'static, Decode> SqlitePollFetcher<Args, String, Decode> {
+impl<Args: 'static, Decode> SqlitePollFetcher<Args, CompactType, Decode> {
     pub fn new(pool: &Pool<Sqlite>, config: &Config, wrk: &WorkerContext) -> Self
     where
-        Decode: Codec<Args, Compact = String> + 'static,
+        Decode: Codec<Args, Compact = CompactType> + 'static,
         Decode::Error: std::error::Error + Send + Sync + 'static,
     {
         Self {
@@ -107,11 +108,11 @@ impl<Args: 'static, Decode> SqlitePollFetcher<Args, String, Decode> {
     }
 }
 
-impl<Args, Decode> Stream for SqlitePollFetcher<Args, String, Decode>
+impl<Args, Decode> Stream for SqlitePollFetcher<Args, CompactType, Decode>
 where
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
-    Decode: Codec<Args, Compact = String> + 'static,
+    Decode: Codec<Args, Compact = CompactType> + 'static,
     // Compact: Unpin + Send + 'static,
 {
     type Item = Result<Option<SqliteTask<Args>>, sqlx::Error>;

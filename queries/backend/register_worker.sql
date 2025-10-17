@@ -1,10 +1,11 @@
 INSERT INTO
-    Workers (id, worker_type, storage_name, layers, last_seen)
+    Workers (id, worker_type, storage_name, layers, last_seen, started_at)
 SELECT
     ?1,
     ?2,
     ?3,
     ?4,
+    strftime('%s', 'now'),
     strftime('%s', 'now')
 WHERE
     NOT EXISTS (
