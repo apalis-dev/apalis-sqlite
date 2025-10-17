@@ -19,7 +19,11 @@ use crate::{
 };
 use crate::{from_row::TaskRow, sink::SqliteSink};
 use apalis_core::{
-    backend::{Backend, TaskStream, codec::Codec, shared::MakeShared},
+    backend::{
+        Backend, TaskStream,
+        codec::{Codec, json::JsonCodec},
+        shared::MakeShared,
+    },
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
 use futures::{
@@ -41,13 +45,16 @@ pub struct SharedSqliteStorage<Decode> {
     _marker: PhantomData<Decode>,
 }
 
-impl<Decode: Codec<CompactType, Compact = CompactType>> SharedSqliteStorage<Decode> {
+impl SharedSqliteStorage<JsonCodec<CompactType>> {
     pub fn new(pool: SqlitePool) -> Self {
+        SharedSqliteStorage::new_with_codec(pool)
+    }
+    pub fn new_with_codec<Codec>(pool: SqlitePool) -> SharedSqliteStorage<Codec> {
         let registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<CompactType>>>>> =
             Arc::new(Mutex::new(HashMap::default()));
         let p = pool.clone();
         let instances = registry.clone();
-        Self {
+        SharedSqliteStorage {
             pool,
             drive: async move {
                 let (tx, rx) = mpsc::unbounded::<DbEvent>();

@@ -22,14 +22,17 @@
 //!
 //! ### Basic Worker Example
 //!
-//! ```rust,no_run
-//! use apalis_sqlite::{SqliteStorage, SqliteContext};
-//! use apalis_core::task::Task;
-//! use apalis_core::worker::context::WorkerContext;
-//! use sqlx::SqlitePool;
-//! use futures::stream;
-//! use std::time::Duration;
-//!
+//! ```rust
+//! # use apalis_sqlite::{SqliteStorage, SqliteContext};
+//! # use apalis_core::task::Task;
+//! # use apalis_core::worker::context::WorkerContext;
+//! # use sqlx::SqlitePool;
+//! # use futures::stream;
+//! # use std::time::Duration;
+//! # use apalis_core::error::BoxDynError;
+//! # use futures::StreamExt;
+//! # use futures::SinkExt;
+//! # use apalis_core::worker::builder::WorkerBuilder;
 //! #[tokio::main]
 //! async fn main() {
 //!     let pool = SqlitePool::connect(":memory:").await.unwrap();
@@ -55,7 +58,7 @@
 //!         Ok(())
 //!     }
 //!
-//!     let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-1")
+//!     let worker = WorkerBuilder::new("worker-1")
 //!         .backend(backend)
 //!         .build(send_reminder);
 //!     worker.run().await.unwrap();
@@ -65,13 +68,17 @@
 //! ### Hooked Worker Example (Event-driven)
 //!
 //! ```rust,no_run
-//! use apalis_sqlite::{SqliteStorage, SqliteContext, Config};
-//! use apalis_core::task::Task;
-//! use apalis_core::worker::context::WorkerContext;
-//! use apalis_core::backend::poll_strategy::{IntervalStrategy, StrategyBuilder};
-//! use sqlx::SqlitePool;
-//! use futures::stream;
-//! use std::time::Duration;
+//! # use apalis_sqlite::{SqliteStorage, SqliteContext, Config};
+//! # use apalis_core::task::Task;
+//! # use apalis_core::worker::context::WorkerContext;
+//! # use apalis_core::backend::poll_strategy::{IntervalStrategy, StrategyBuilder};
+//! # use sqlx::SqlitePool;
+//! # use futures::stream;
+//! # use std::time::Duration;
+//! # use apalis_core::error::BoxDynError;
+//! # use futures::StreamExt;
+//! # use futures::SinkExt;
+//! # use apalis_core::worker::builder::WorkerBuilder;
 //!
 //! #[tokio::main]
 //! async fn main() {
@@ -94,7 +101,7 @@
 //!             let mut start = 0;
 //!             let items = stream::repeat_with(move || {
 //!                 start += 1;
-//!                 Task::builder(start)
+//!                 Task::builder(serde_json::to_string(&start).unwrap())
 //!                     .run_after(Duration::from_secs(1))
 //!                     .with_ctx(SqliteContext::new().with_priority(start))
 //!                     .build()
@@ -102,6 +109,7 @@
 //!             .take(20)
 //!             .collect::<Vec<_>>()
 //!             .await;
+//!             // push encoded tasks
 //!             apalis_sqlite::sink::push_tasks(pool, config, items).await.unwrap();
 //!         }
 //!     });
@@ -114,7 +122,7 @@
 //!         Ok(())
 //!     }
 //!
-//!     let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-2")
+//!     let worker = WorkerBuilder::new("worker-2")
 //!         .backend(backend)
 //!         .build(send_reminder);
 //!     worker.run().await.unwrap();
@@ -127,9 +135,10 @@
 //!
 //! ```rust,no_run
 //! # use sqlx::SqlitePool;
+//! # use apalis_sqlite::SqliteStorage;
 //! # #[tokio::main] async fn main() {
 //! let pool = SqlitePool::connect(":memory:").await.unwrap();
-//! apalis_sqlite::SqliteStorage::setup(&pool).await.unwrap();
+//! SqliteStorage::setup(&pool).await.unwrap();
 //! # }
 //! ```
 //!
@@ -140,7 +149,8 @@ use std::{fmt, marker::PhantomData};
 
 use apalis_core::{
     backend::{
-        codec::{json::JsonCodec, Codec }, Backend, TaskStream
+        Backend, TaskStream,
+        codec::{Codec, json::JsonCodec},
     },
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
@@ -176,7 +186,7 @@ pub mod fetcher;
 pub mod from_row;
 pub mod queries;
 mod shared;
-mod sink;
+pub mod sink;
 
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use callback::{CallbackListener, DbEvent};
@@ -186,7 +196,7 @@ pub use shared::{SharedPostgresError, SharedSqliteStorage};
 pub use sqlx::SqlitePool;
 
 #[cfg(feature = "json")]
-pub type CompactType = serde_json::Value;
+pub type CompactType = String;
 
 #[cfg(feature = "bytes")]
 pub type CompactType = Vec<u8>;

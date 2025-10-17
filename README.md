@@ -6,7 +6,7 @@ Background task processing for Rust using Apalis and SQLite.
 
 - **Reliable job queue** using SQLite as the backend.
 - **Multiple storage types**: standard polling and event-driven (hooked) storage.
-- **Custom codecs** for serializing/deserializing job arguments.
+- **Custom codecs** for serializing/deserializing job arguments as bytes and json.
 - **Heartbeat and orphaned job re-enqueueing** for robust job processing.
 - **Integration with Apalis workers and middleware.**
 
@@ -77,7 +77,7 @@ async fn main() {
             let mut start = 0;
             let items = stream::repeat_with(move || {
                 start += 1;
-                Task::builder(start)
+                Task::builder(serde_json::to_value(&start).unwrap())
                     .run_after(Duration::from_secs(1))
                     .with_ctx(SqliteContext::new().with_priority(start))
                     .build()

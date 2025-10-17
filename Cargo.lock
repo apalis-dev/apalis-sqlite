@@ -57,6 +57,7 @@ dependencies = [
  "apalis-core",
  "apalis-sqlite",
  "async-std",
+ "bytes",
  "chrono",
  "futures",
  "libsqlite3-sys",

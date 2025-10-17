@@ -6,7 +6,7 @@
       {
         "name": "job",
         "ordinal": 0,
-        "type_info": "Blob"
+        "type_info": "Text"
       },
       {
         "name": "id",
