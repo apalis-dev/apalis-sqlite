@@ -9,9 +9,9 @@ updates:
       time: "06:00"
     open-pull-requests-limit: 10
     reviewers:
-      - "mureithinjuguna"
+      - "geofmureithi"
     assignees:
-      - "mureithinjuguna"
+      - "geofmureithi"
     commit-message:
       prefix: "deps"
       include: "scope"

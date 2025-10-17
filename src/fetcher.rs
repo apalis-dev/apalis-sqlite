@@ -113,7 +113,6 @@ where
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
     Decode: Codec<Args, Compact = CompactType> + 'static,
-    // Compact: Unpin + Send + 'static,
 {
     type Item = Result<Option<SqliteTask<Args>>, sqlx::Error>;
 
