@@ -45,7 +45,7 @@ async fn main() {
         Ok(())
     }
 
-    let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-1")
+    let worker = WorkerBuilder::new("worker-1")
         .backend(backend)
         .build(send_reminder);
     worker.run().await.unwrap();
@@ -93,9 +93,53 @@ async fn main() {
         Ok(())
     }
 
-    let worker = apalis_core::worker::builder::WorkerBuilder::new("worker-2")
+    let worker = WorkerBuilder::new("worker-2")
         .backend(backend)
         .build(send_reminder);
+    worker.run().await.unwrap();
+}
+```
+
+### Workflow Example
+
+```rust,no_run
+#[tokio::main]
+async fn main() {
+    let workflow = WorkFlow::new("odd-numbers-workflow")
+        .then(|a: usize| async move {
+            Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>())
+        })
+        .filter_map(|x| async move {
+            if x % 2 != 0 { Some(x) } else { None }
+        })
+        .filter_map(|x| async move {
+            if x % 3 != 0 { Some(x) } else { None }
+        })
+        .filter_map(|x| async move {
+            if x % 5 != 0 { Some(x) } else { None }
+        })
+        .delay_for(Duration::from_millis(1000))
+        .then(|a: Vec<usize>| async move {
+            println!("Sum: {}", a.iter().sum::<usize>());
+            Ok::<(), WorkflowError>(())
+        });
+
+    let pool = SqlitePool::connect(":memory:").await.unwrap();
+    SqliteStorage::setup(&pool).await.unwrap();
+    let mut sqlite = SqliteStorage::new_in_queue(&pool, "test-workflow");
+
+    sqlite.push(100usize).await.unwrap();
+
+    let worker = WorkerBuilder::new("rango-tango")
+        .backend(sqlite)
+        .on_event(|ctx, ev| {
+            println!("On Event = {:?}", ev);
+            if matches!(ev, Event::Error(_)) {
+                ctx.stop().unwrap();
+            }
+        })
+        .build(workflow);
+
     worker.run().await.unwrap();
 }
 ```
