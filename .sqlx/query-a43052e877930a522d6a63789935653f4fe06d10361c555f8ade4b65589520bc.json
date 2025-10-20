@@ -62,6 +62,11 @@
         "name": "priority",
         "ordinal": 11,
         "type_info": "Integer"
+      },
+      {
+        "name": "metadata",
+        "ordinal": 12,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -79,7 +84,8 @@
       true,
       true,
       true,
-      false
+      false,
+      true
     ]
   },
   "hash": "a43052e877930a522d6a63789935653f4fe06d10361c555f8ade4b65589520bc"

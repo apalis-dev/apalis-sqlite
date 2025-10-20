@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use apalis_core::{
     error::{AbortError, BoxDynError},
     task::{Parts, status::Status},
@@ -32,6 +34,18 @@ impl<Res: Serialize> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
     ) -> Self::Future {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
+
+        match res {
+            Ok(r) => {
+                let args = if let Some(job_ref) = (&r as &dyn Any).downcast_ref::<StepResult<Args>>() {
+                // If Args == CompactType, clone it directly (no decoding needed)
+                job_ref.clone()
+        } 
+            },
+            Err(e),
+           
+            
+        }
 
         let response = serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()));
         let status = calculate_status(parts, res);

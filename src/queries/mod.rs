@@ -8,6 +8,7 @@ pub mod metrics;
 pub mod reenqueue_orphaned;
 pub mod register_worker;
 pub mod keep_alive;
+pub mod wait_for;
 
 fn stat_type_from_string(s: &str) -> StatType {
     match s {

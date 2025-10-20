@@ -295,6 +295,27 @@ impl<T> SqliteStorage<T, (), ()> {
         }
     }
 
+    pub fn new_in_queue(
+        pool: &Pool<Sqlite>,
+        queue: &str,
+    ) -> SqliteStorage<
+        T,
+        JsonCodec<CompactType>,
+        fetcher::SqliteFetcher<T, CompactType, JsonCodec<CompactType>>,
+    > {
+        let config = Config::new(queue);
+        SqliteStorage {
+            pool: pool.clone(),
+            job_type: PhantomData,
+            sink: SqliteSink::new(pool, &config),
+            config,
+            codec: PhantomData,
+            fetcher: fetcher::SqliteFetcher {
+                _marker: PhantomData,
+            },
+        }
+    }
+
     pub fn new_with_codec<Codec>(
         pool: &Pool<Sqlite>,
         config: &Config,
@@ -530,14 +551,17 @@ where
 mod tests {
     use std::time::Duration;
 
+    use apalis_workflow::{WorkFlow, WorkflowError};
     use chrono::Local;
 
     use apalis_core::{
-        backend::poll_strategy::{IntervalStrategy, StrategyBuilder},
+        backend::{
+            WeakTaskSink,
+            poll_strategy::{IntervalStrategy, StrategyBuilder},
+        },
         error::BoxDynError,
-        worker::builder::WorkerBuilder,
+        worker::{builder::WorkerBuilder, event::Event, ext::event_listener::EventListenerExt},
     };
-    use futures::SinkExt;
 
     use super::*;
 
@@ -553,14 +577,10 @@ mod tests {
 
         let mut items = stream::repeat_with(move || {
             start += 1;
-            let task = Task::builder(start)
-                .run_after(Duration::from_secs(1))
-                .with_ctx(SqliteContext::new().with_priority(1))
-                .build();
-            Ok(task)
+            start
         })
         .take(ITEMS);
-        backend.send_all(&mut items).await.unwrap();
+        backend.push_stream(&mut items).await.unwrap();
 
         println!("Starting worker at {}", Local::now());
 
@@ -621,6 +641,38 @@ mod tests {
         let worker = WorkerBuilder::new("rango-tango-1")
             .backend(backend)
             .build(send_reminder);
+        worker.run().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_workflow() {
+        let workflow = WorkFlow::new("odd-numbers-workflow")
+            .then(|a: usize| async move { Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>()) })
+            .filter_map(|x| async move { if x % 2 != 0 { Some(x) } else { None } })
+            // .delay_for(Duration::from_millis(1000))
+            .then(|a: Vec<usize>| async move {
+                println!("Sum: {}", a.iter().sum::<usize>());
+                Err::<(), WorkflowError>(WorkflowError::MissingContextError)
+            });
+
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+        let mut sqlite = SqliteStorage::new_in_queue(&pool, "simple-workflow-queue");
+
+        sqlite
+            .push(10usize)
+            .await
+            .unwrap();
+
+        let worker = WorkerBuilder::new("rango-tango")
+            .backend(sqlite)
+            .on_event(|ctx, ev| {
+                println!("On Event = {:?}", ev);
+                if matches!(ev, Event::Error(_)) {
+                    ctx.stop().unwrap();
+                }
+            })
+            .build(workflow);
         worker.run().await.unwrap();
     }
 }

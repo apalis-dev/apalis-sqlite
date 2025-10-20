@@ -289,11 +289,9 @@ mod tests {
     use apalis_core::{
         backend::TaskSink,
         error::BoxDynError,
-        task::{Task, task_id::TaskId},
+        task::{task_id::TaskId},
         worker::builder::WorkerBuilder,
     };
-
-    use crate::context::SqliteContext;
 
     use super::*;
 
@@ -309,13 +307,8 @@ mod tests {
 
         let mut int_store = store.make_shared().unwrap();
 
-        let task = Task::builder(99u32)
-            .run_after(Duration::from_secs(2))
-            .with_ctx(SqliteContext::new().with_priority(1))
-            .build();
-
         map_store
-            .send_all(&mut stream::iter(vec![task].into_iter().map(Ok)))
+            .push(HashMap::<String, i32>::from([("value".to_string(), 42)]))
             .await
             .unwrap();
         int_store.push(99).await.unwrap();

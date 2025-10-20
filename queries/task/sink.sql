@@ -13,5 +13,6 @@ VALUES
         NULL,
         NULL,
         NULL,
-        ?6
+        ?6,
+        ?7
     )
