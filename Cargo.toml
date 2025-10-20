@@ -26,11 +26,11 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-alpha.4", default-features = false, features = [
+apalis-core = { version = "1.0.0-alpha.6", default-features = false, features = [
     "sleep",
     "json",
-], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
-apalis-workflow = { version = "0.1.0-alpha.3", git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
+] }
+apalis-workflow = { version = "0.1.0-alpha.4" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -46,10 +46,8 @@ bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.4", features = [
-    "test-utils",
-], git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
-apalis-workflow = { version = "0.1.0-alpha.2", git = "https://github.com/geofmureithi/apalis.git", branch = "chore/traits-expansion" }
+apalis-core = { version = "1.0.0-alpha.6", features = ["test-utils"] }
+apalis-workflow = { version = "0.1.0-alpha.4" }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 
 [package.metadata.docs.rs]
