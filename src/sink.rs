@@ -4,7 +4,6 @@ use std::{
     task::{Context, Poll},
 };
 
-use apalis_core::backend::codec::Codec;
 use futures::{
     FutureExt, Sink,
     future::{BoxFuture, Shared},
@@ -59,6 +58,7 @@ pub async fn push_tasks(
             Some(ref queue) => queue.to_string(),
             None => cfg.queue().to_string(),
         };
+        let meta = serde_json::to_string(&task.parts.ctx.meta()).unwrap_or_default();
         sqlx::query_file!(
             "queries/task/sink.sql",
             args,
@@ -67,6 +67,7 @@ pub async fn push_tasks(
             max_attempts,
             run_at,
             priority,
+            meta
         )
         .execute(&mut *tx)
         .await?;
@@ -88,11 +89,9 @@ impl<Args, Compact, Codec> SqliteSink<Args, Compact, Codec> {
     }
 }
 
-impl<Args, Encode, Fetcher> Sink<SqliteTask<Args>> for SqliteStorage<Args, Encode, Fetcher>
+impl<Args, Encode, Fetcher> Sink<SqliteTask<CompactType>> for SqliteStorage<Args, Encode, Fetcher>
 where
     Args: Send + Sync + 'static,
-    Encode: Codec<Args, Compact = CompactType>,
-    Encode::Error: std::error::Error + Send + Sync + 'static,
 {
     type Error = sqlx::Error;
 
@@ -100,12 +99,9 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn start_send(self: Pin<&mut Self>, item: SqliteTask<Args>) -> Result<(), Self::Error> {
+    fn start_send(self: Pin<&mut Self>, item: SqliteTask<CompactType>) -> Result<(), Self::Error> {
         // Add the item to the buffer
-        self.project()
-            .sink
-            .buffer
-            .push(item.try_map(|s| Encode::encode(&s).map_err(|e| sqlx::Error::Encode(e.into())))?);
+        self.project().sink.buffer.push(item);
         Ok(())
     }
 

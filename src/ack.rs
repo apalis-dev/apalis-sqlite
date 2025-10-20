@@ -1,16 +1,20 @@
+use std::any::Any;
+
 use apalis_core::{
     error::{AbortError, BoxDynError},
     task::{Parts, status::Status},
     worker::{context::WorkerContext, ext::ack::Acknowledge},
 };
+use apalis_workflow::StepResult;
 use futures::{FutureExt, future::BoxFuture};
 use serde::Serialize;
+use serde_json::Value;
 use sqlx::SqlitePool;
 use tower_layer::Layer;
 use tower_service::Service;
 use ulid::Ulid;
 
-use crate::{SqliteTask, context::SqliteContext};
+use crate::{CompactType, SqliteTask, context::SqliteContext};
 
 #[derive(Clone)]
 pub struct SqliteAck {
@@ -22,7 +26,7 @@ impl SqliteAck {
     }
 }
 
-impl<Res: Serialize> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
+impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
     type Error = sqlx::Error;
     type Future = BoxFuture<'static, Result<(), Self::Error>>;
     fn ack(
@@ -33,7 +37,20 @@ impl<Res: Serialize> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
 
-        let response = serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()));
+        // Workflows need special handling to serialize the response correctly
+        let response = match res {
+            Ok(r) => {
+                if let Some(res_ref) = (r as &dyn Any).downcast_ref::<StepResult<CompactType>>() {
+                    let res_deserialized: Result<Value, serde_json::Error> =
+                        serde_json::from_str(&res_ref.0);
+                    serde_json::to_string(&res_deserialized.map_err(|e| e.to_string()))
+                } else {
+                    serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()))
+                }
+            }
+            _ => serde_json::to_string(&res.as_ref().map_err(|e| e.to_string())),
+        };
+
         let status = calculate_status(parts, res);
         parts.status.store(status.clone());
         let attempt = parts.attempt.current() as i32;
@@ -151,7 +168,7 @@ where
             .unwrap();
         let parts = &req.parts;
         let task_id = match &parts.task_id {
-            Some(id) => id.inner().clone(),
+            Some(id) => *id.inner(),
             None => {
                 return async {
                     Err(sqlx::Error::ColumnNotFound("TASK_ID_FOR_LOCK".to_owned()).into())

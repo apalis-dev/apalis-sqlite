@@ -12,6 +12,7 @@ where
         Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
     D: Codec<Args, Compact = CompactType>,
     D::Error: std::error::Error + Send + Sync + 'static,
+    Args: 'static,
 {
     fn list_tasks(
         &self,

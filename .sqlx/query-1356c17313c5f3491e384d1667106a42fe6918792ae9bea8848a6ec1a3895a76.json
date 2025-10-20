@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n    id,\n    status,\n    last_result as result\nFROM\n    Jobs\nWHERE\n    id IN (\n        SELECT\n            value\n        FROM\n            json_each(?)\n    )\n    AND (\n        status = 'Done'\n        OR (\n            status = 'Failed'\n            AND attempts >= max_attempts\n        )\n        OR status = 'Killed'\n    )\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "status",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "result",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "1356c17313c5f3491e384d1667106a42fe6918792ae9bea8848a6ec1a3895a76"
+}

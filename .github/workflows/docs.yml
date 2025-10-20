@@ -2,9 +2,9 @@ name: Documentation
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,6 +31,6 @@ jobs:
 
       - name: Build documentation
         run: |
-          cargo doc --all-features --no-deps --document-private-items
+          cargo doc --features=migrate,tokio-comp,json --no-deps --document-private-items
         env:
           RUSTDOCFLAGS: "--cfg docsrs -Dwarnings"

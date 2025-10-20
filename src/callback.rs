@@ -50,14 +50,6 @@ pub(crate) extern "C" fn update_hook_callback(
         let db = CStr::from_ptr(db_name).to_string_lossy().to_string();
         let table = CStr::from_ptr(table_name).to_string_lossy().to_string();
 
-        log::debug!(
-            "DB Event - Operation: {}, DB: {}, Table: {}, RowID: {}",
-            op_str,
-            db,
-            table,
-            rowid
-        );
-
         // Recover sender from raw pointer
         let tx = &mut *(arg as *mut mpsc::UnboundedSender<DbEvent>);
 

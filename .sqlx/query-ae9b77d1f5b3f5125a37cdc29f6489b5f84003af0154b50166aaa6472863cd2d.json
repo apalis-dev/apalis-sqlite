@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO\n    Jobs\nVALUES\n    (\n        ?1,\n        ?2,\n        ?3,\n        'Pending',\n        0,\n        ?4,\n        ?5,\n        NULL,\n        NULL,\n        NULL,\n        NULL,\n        ?6,\n        ?7\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "ae9b77d1f5b3f5125a37cdc29f6489b5f84003af0154b50166aaa6472863cd2d"
+}

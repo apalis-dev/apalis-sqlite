@@ -8,7 +8,7 @@ use std::{
 
 use apalis_core::{
     backend::{
-        codec::{Codec, },
+        codec::Codec,
         poll_strategy::{PollContext, PollStrategyExt},
     },
     task::Task,
@@ -28,6 +28,7 @@ pub async fn fetch_next<Args, D: Codec<Args, Compact = CompactType>>(
 ) -> Result<Vec<Task<Args, SqliteContext, Ulid>>, sqlx::Error>
 where
     D::Error: std::error::Error + Send + Sync + 'static,
+    Args: 'static,
 {
     let job_type = config.queue().to_string();
     let buffer_size = config.buffer_size() as i32;

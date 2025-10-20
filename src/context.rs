@@ -1,10 +1,13 @@
-use std::convert::Infallible;
+use std::{collections::HashMap, convert::Infallible};
 
-use apalis_core::task_fn::FromRequest;
+use apalis_core::{task::metadata::MetadataExt, task_fn::FromRequest};
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize, Serialize,
+    de::{DeserializeOwned, Error},
+};
 
-use crate::SqliteTask;
+use crate::{CompactType, SqliteTask};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqliteContext {
@@ -15,6 +18,7 @@ pub struct SqliteContext {
     done_at: Option<i64>,
     priority: i32,
     queue: Option<String>,
+    meta: HashMap<String, CompactType>,
 }
 
 impl Default for SqliteContext {
@@ -34,6 +38,7 @@ impl SqliteContext {
             lock_by: None,
             priority: 0,
             queue: None,
+            meta: HashMap::new(),
         }
     }
 
@@ -111,11 +116,37 @@ impl SqliteContext {
         self.queue = Some(queue);
         self
     }
+
+    pub fn meta(&self) -> &HashMap<String, CompactType> {
+        &self.meta
+    }
+
+    pub fn with_meta(mut self, meta: HashMap<String, CompactType>) -> Self {
+        self.meta = meta;
+        self
+    }
 }
 
 impl<Args: Sync> FromRequest<SqliteTask<Args>> for SqliteContext {
     type Error = Infallible;
     async fn from_request(req: &SqliteTask<Args>) -> Result<Self, Self::Error> {
         Ok(req.parts.ctx.clone())
+    }
+}
+
+impl<T: DeserializeOwned + Serialize> MetadataExt<T> for SqliteContext {
+    type Error = serde_json::Error;
+    fn extract(&self) -> Result<T, Self::Error> {
+        self.meta
+            .get(std::any::type_name::<T>())
+            .and_then(|v| serde_json::from_str::<T>(v).ok())
+            .ok_or(serde_json::Error::custom("Failed to extract metadata"))
+    }
+    fn inject(&mut self, value: T) -> Result<(), Self::Error> {
+        self.meta.insert(
+            std::any::type_name::<T>().to_string(),
+            serde_json::to_string(&value).unwrap(),
+        );
+        Ok(())
     }
 }
