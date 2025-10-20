@@ -55,4 +55,4 @@ apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`
 rustdoc-args = ["--cfg", "docsrs"]
-all-features = true
+features = ["migrate", "tokio-comp", "json"]

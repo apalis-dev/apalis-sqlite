@@ -287,9 +287,7 @@ mod tests {
     use std::time::Duration;
 
     use apalis_core::{
-        backend::TaskSink,
-        error::BoxDynError,
-        task::{task_id::TaskId},
+        backend::TaskSink, error::BoxDynError, task::task_id::TaskId,
         worker::builder::WorkerBuilder,
     };
 

@@ -138,7 +138,7 @@ impl<T: DeserializeOwned + Serialize> MetadataExt<T> for SqliteContext {
     type Error = serde_json::Error;
     fn extract(&self) -> Result<T, Self::Error> {
         self.meta
-            .get(&std::any::type_name::<T>().to_string())
+            .get(std::any::type_name::<T>())
             .and_then(|v| serde_json::from_str::<T>(v).ok())
             .ok_or(serde_json::Error::custom("Failed to extract metadata"))
     }

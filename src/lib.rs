@@ -198,6 +198,7 @@ pub use sqlx::SqlitePool;
 #[cfg(feature = "json")]
 pub type CompactType = String;
 
+// Bytes not yet supported due to sqlx limitations
 #[cfg(feature = "bytes")]
 pub type CompactType = Vec<u8>;
 
@@ -361,7 +362,7 @@ impl<T> SqliteStorage<T, (), ()> {
             job_type: PhantomData,
             config: config.clone(),
             codec: PhantomData,
-            sink: SqliteSink::new(&pool, config),
+            sink: SqliteSink::new(pool, config),
             fetcher: HookCallbackListener,
         }
     }
@@ -375,7 +376,7 @@ impl<T> SqliteStorage<T, (), ()> {
             job_type: PhantomData,
             config: config.clone(),
             codec: PhantomData,
-            sink: SqliteSink::new(&pool, config),
+            sink: SqliteSink::new(pool, config),
             fetcher: HookCallbackListener,
         }
     }
@@ -560,8 +561,10 @@ mod tests {
             poll_strategy::{IntervalStrategy, StrategyBuilder},
         },
         error::BoxDynError,
+        task::data::Data,
         worker::{builder::WorkerBuilder, event::Event, ext::event_listener::EventListenerExt},
     };
+    use serde::{Deserialize, Serialize};
 
     use super::*;
 
@@ -649,7 +652,9 @@ mod tests {
         let workflow = WorkFlow::new("odd-numbers-workflow")
             .then(|a: usize| async move { Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>()) })
             .filter_map(|x| async move { if x % 2 != 0 { Some(x) } else { None } })
-            // .delay_for(Duration::from_millis(1000))
+            .filter_map(|x| async move { if x % 3 != 0 { Some(x) } else { None } })
+            .filter_map(|x| async move { if x % 5 != 0 { Some(x) } else { None } })
+            .delay_for(Duration::from_millis(1000))
             .then(|a: Vec<usize>| async move {
                 println!("Sum: {}", a.iter().sum::<usize>());
                 Err::<(), WorkflowError>(WorkflowError::MissingContextError)
@@ -657,12 +662,16 @@ mod tests {
 
         let pool = SqlitePool::connect(":memory:").await.unwrap();
         SqliteStorage::setup(&pool).await.unwrap();
-        let mut sqlite = SqliteStorage::new_in_queue(&pool, "simple-workflow-queue");
+        let mut sqlite = SqliteStorage::new_with_callback(
+            &pool,
+            &Config::new("workflow-queue").with_poll_interval(
+                StrategyBuilder::new()
+                    .apply(IntervalStrategy::new(Duration::from_millis(100)))
+                    .build(),
+            ),
+        );
 
-        sqlite
-            .push(10usize)
-            .await
-            .unwrap();
+        sqlite.push(100usize).await.unwrap();
 
         let worker = WorkerBuilder::new("rango-tango")
             .backend(sqlite)
@@ -670,6 +679,128 @@ mod tests {
                 println!("On Event = {:?}", ev);
                 if matches!(ev, Event::Error(_)) {
                     ctx.stop().unwrap();
+                }
+            })
+            .build(workflow);
+        worker.run().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_workflow_complete() {
+        #[derive(Debug, Serialize, Deserialize, Clone)]
+        struct PipelineConfig {
+            min_confidence: f32,
+            enable_sentiment: bool,
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct UserInput {
+            text: String,
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Classified {
+            text: String,
+            label: String,
+            confidence: f32,
+        }
+
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Summary {
+            text: String,
+            sentiment: Option<String>,
+        }
+
+        let workflow = WorkFlow::new("text-pipeline")
+            // Step 1: Preprocess input (e.g., tokenize, lowercase)
+            .then(|input: UserInput, mut worker: WorkerContext| async move {
+                worker.emit(&Event::Custom(Box::new(format!(
+                    "Preprocessing input: {}",
+                    input.text
+                ))));
+                let processed = input.text.to_lowercase();
+                Ok::<_, WorkflowError>(processed)
+            })
+            // Step 2: Classify text
+            .then(|text: String| async move {
+                let confidence = 0.85; // pretend model confidence
+                let items = text.split_whitespace().collect::<Vec<_>>();
+                let results = items
+                    .into_iter()
+                    .map(|x| Classified {
+                        text: x.to_string(),
+                        label: if x.contains("rust") {
+                            "Tech"
+                        } else {
+                            "General"
+                        }
+                        .to_string(),
+                        confidence,
+                    })
+                    .collect::<Vec<_>>();
+                Ok::<_, WorkflowError>(results)
+            })
+            // Step 3: Filter out low-confidence predictions
+            .filter_map(
+                |c: Classified| async move { if c.confidence >= 0.6 { Some(c) } else { None } },
+            )
+            .filter_map(move |c: Classified, config: Data<PipelineConfig>| {
+                let cfg = config.enable_sentiment;
+                async move {
+                    if !cfg {
+                        return Some(Summary {
+                            text: c.text,
+                            sentiment: None,
+                        });
+                    }
+
+                    // pretend we run a sentiment model
+                    let sentiment = if c.text.contains("delightful") {
+                        "positive"
+                    } else {
+                        "neutral"
+                    };
+                    Some(Summary {
+                        text: c.text,
+                        sentiment: Some(sentiment.to_string()),
+                    })
+                }
+            })
+            .then(|a: Vec<Summary>, mut worker: WorkerContext| async move {
+                worker.emit(&Event::Custom(Box::new(format!(
+                    "Generated {} summaries",
+                    a.len()
+                ))));
+                worker.stop()
+            });
+
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+        let mut sqlite = SqliteStorage::new_with_callback(&pool, &Config::new("text-pipeline"));
+
+        let input = UserInput {
+            text: "Rust makes systems programming delightful!".to_string(),
+        };
+        sqlite.push(input).await.unwrap();
+
+        let worker = WorkerBuilder::new("rango-tango")
+            .backend(sqlite)
+            .data(PipelineConfig {
+                min_confidence: 0.8,
+                enable_sentiment: true,
+            })
+            .on_event(|ctx, ev| match ev {
+                Event::Custom(msg) => {
+                    if let Some(m) = msg.downcast_ref::<String>() {
+                        println!("Custom Message: {}", m);
+                    }
+                }
+                Event::Error(_) => {
+                    println!("On Error = {:?}", ev);
+                    ctx.stop().unwrap();
+                }
+                _ => {
+                    println!("On Event = {:?}", ev);
                 }
             })
             .build(workflow);

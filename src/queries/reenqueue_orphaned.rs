@@ -23,11 +23,11 @@ pub fn reenqueue_orphaned(
                         res.rows_affected()
                     );
                 }
-                return Ok(res.rows_affected());
+                Ok(res.rows_affected())
             }
             Err(e) => {
-                log::error!("Failed to re-enqueue orphaned tasks: {}", e);
-                return Err(e);
+                log::error!("Failed to re-enqueue orphaned tasks: {e}");
+                Err(e)
             }
         }
     }
