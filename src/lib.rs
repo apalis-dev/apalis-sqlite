@@ -200,6 +200,8 @@
 //! ## License
 //!
 //! Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+//! 
+//! [`SqliteStorageWithHook`]: crate::SqliteStorage
 use std::{fmt, marker::PhantomData};
 
 use apalis_core::{
