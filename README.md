@@ -34,7 +34,7 @@ async fn main() {
         start += 1;
         let task = Task::builder(start)
             .run_after(Duration::from_secs(1))
-            .with_ctx(SqliteContext::new().with_priority(1))
+            .with_ctx(SqlContext::new().with_priority(1))
             .build();
         Ok(task)
     })
@@ -79,7 +79,7 @@ async fn main() {
                 start += 1;
                 Task::builder(serde_json::to_value(&start).unwrap())
                     .run_after(Duration::from_secs(1))
-                    .with_ctx(SqliteContext::new().with_priority(start))
+                    .with_ctx(SqlContext::new().with_priority(start))
                     .build()
             })
             .take(20)

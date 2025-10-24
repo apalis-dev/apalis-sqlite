@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "Delete from\n    Jobs\nwhere\n    status = 'Done'\n    OR status = 'Killed'\n    OR (\n        status = 'Failed'\n        AND max_attempts <= attempts\n    );\n\nVACUUM;\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "b3e8f3efeeb73cc19602247f4d61c94a3743d2a7608360446ecd82df3264f4ce"
+}

@@ -15,8 +15,7 @@ async-std-comp = ["async-std", "sqlx/runtime-async-std-rustls"]
 async-std-comp-native-tls = ["async-std", "sqlx/runtime-async-std-native-tls"]
 tokio-comp = ["tokio", "sqlx/runtime-tokio-rustls"]
 tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio-native-tls"]
-bytes = []
-json = ["sqlx/json"]
+json = ["apalis-core/json", "sqlx/json"]
 
 [dependencies.sqlx]
 version = "0.8.6"
@@ -28,9 +27,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 apalis-core = { version = "1.0.0-alpha.6", default-features = false, features = [
     "sleep",
-    "json",
-] }
-apalis-workflow = { version = "0.1.0-alpha.4" }
+], path = "../apalis/packages/apalis-core" }
+apalis-sql = { version = "1.0.0-alpha.6", path = "../apalis/packages/apalis-sql" }
+apalis-workflow = { version = "0.1.0-alpha.4", path = "../apalis/packages/apalis-workflow" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -46,11 +45,13 @@ bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.6", features = ["test-utils"] }
-apalis-workflow = { version = "0.1.0-alpha.4" }
+apalis-core = { version = "1.0.0-alpha.6", features = [
+    "test-utils",
+], path = "../apalis/packages/apalis-core" }
+apalis-workflow = { version = "0.1.0-alpha.4", path = "../apalis/packages/apalis-workflow" }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`
 rustdoc-args = ["--cfg", "docsrs"]
-features = ["migrate", "tokio-comp", "json"]
+all-features = true

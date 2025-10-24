@@ -14,7 +14,7 @@ use crate::{CompactType, SqliteStorage};
 struct ResultRow {
     pub id: Option<String>,
     pub status: Option<String>,
-    pub result: Option<CompactType>,
+    pub result: Option<String>,
 }
 
 impl<O: 'static + Send, Args, F, Decode> WaitForCompletion<O> for SqliteStorage<Args, Decode, F>

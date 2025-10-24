@@ -13,11 +13,10 @@ use crate::{
     CompactType, Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
     ack::{LockTaskLayer, SqliteAck},
     callback::{DbEvent, update_hook_callback},
-    context::SqliteContext,
     fetcher::SqlitePollFetcher,
     initial_heartbeat, keep_alive,
 };
-use crate::{from_row::TaskRow, sink::SqliteSink};
+use crate::{from_row::SqliteTaskRow, sink::SqliteSink};
 use apalis_core::{
     backend::{
         Backend, TaskStream,
@@ -26,6 +25,7 @@ use apalis_core::{
     },
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
+use apalis_sql::{context::SqlContext, from_row::TaskRow};
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
@@ -90,14 +90,18 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
                         let mut tx = pool.begin().await?;
                         let buffer_size = max(10, instances.len()) as i32;
                         let res: Vec<_> = sqlx::query_file_as!(
-                            TaskRow,
+                            SqliteTaskRow,
                             "queries/backend/fetch_next_shared.sql",
                             job_types,
                             row_ids,
                             buffer_size,
                         )
                         .fetch(&mut *tx)
-                        .map(|r| r?.try_into_task_compact())
+                        .map(|r| {
+                            let row: TaskRow = r?.try_into()?;
+                            row.try_into_task_compact()
+                                .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+                        })
                         .try_collect()
                         .await?;
                         tx.commit().await?;
@@ -221,7 +225,7 @@ where
 
     type Compact = CompactType;
 
-    type Context = SqliteContext;
+    type Context = SqlContext;
 
     type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
 
