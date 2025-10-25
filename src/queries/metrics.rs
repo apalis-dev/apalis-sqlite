@@ -1,7 +1,7 @@
 use apalis_core::backend::{Backend, Metrics, Statistic};
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteContext, SqliteStorage};
+use crate::{CompactType, SqlContext, SqliteStorage};
 
 struct StatisticRow {
     /// The priority of the statistic (lower number means higher priority)
@@ -17,7 +17,7 @@ struct StatisticRow {
 impl<Args, D, F> Metrics for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn global(&self) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
         let pool = self.pool.clone();

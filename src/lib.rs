@@ -23,7 +23,7 @@
 //! ### Basic Worker Example
 //!
 //! ```rust
-//! # use apalis_sqlite::{SqliteStorage, SqliteContext};
+//! # use apalis_sqlite::{SqliteStorage, SqlContext};
 //! # use apalis_core::task::Task;
 //! # use apalis_core::worker::context::WorkerContext;
 //! # use sqlx::SqlitePool;
@@ -65,7 +65,7 @@
 //! ### Hooked Worker Example (Event-driven)
 //!
 //! ```rust,no_run
-//! # use apalis_sqlite::{SqliteStorage, SqliteContext, Config};
+//! # use apalis_sqlite::{SqliteStorage, SqlContext, Config};
 //! # use apalis_core::task::Task;
 //! # use apalis_core::worker::context::WorkerContext;
 //! # use apalis_core::backend::poll_strategy::{IntervalStrategy, StrategyBuilder};
@@ -100,7 +100,7 @@
 //!                 start += 1;
 //!                 Task::builder(serde_json::to_string(&start).unwrap())
 //!                     .run_after(Duration::from_secs(1))
-//!                     .with_ctx(SqliteContext::new().with_priority(start))
+//!                     .with_ctx(SqlContext::new().with_priority(start))
 //!                     .build()
 //!             })
 //!             .take(20)
@@ -128,7 +128,7 @@
 //! ### Workflow Example
 //!
 //! ```rust,no_run
-//! # use apalis_sqlite::{SqliteStorage, SqliteContext, Config};
+//! # use apalis_sqlite::{SqliteStorage, SqlContext, Config};
 //! # use apalis_core::task::Task;
 //! # use apalis_core::worker::context::WorkerContext;
 //! # use sqlx::SqlitePool;
@@ -200,7 +200,7 @@
 //! ## License
 //!
 //! Licensed under either of Apache License, Version 2.0 or MIT license at your option.
-//! 
+//!
 //! [`SqliteStorageWithHook`]: crate::SqliteStorage
 use std::{fmt, marker::PhantomData};
 
@@ -211,7 +211,9 @@ use apalis_core::{
     },
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
+    layers::Stack,
 };
+use apalis_sql::context::SqlContext;
 use futures::{
     FutureExt, StreamExt, TryFutureExt, TryStreamExt,
     channel::mpsc,
@@ -221,7 +223,6 @@ use futures::{
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::{Pool, Sqlite};
 use std::ffi::c_void;
-use tower_layer::Stack;
 use ulid::Ulid;
 
 use crate::{
@@ -238,25 +239,88 @@ use crate::{
 mod ack;
 mod callback;
 mod config;
-mod context;
 pub mod fetcher;
-pub mod from_row;
 pub mod queries;
 mod shared;
 pub mod sink;
 
-pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
+mod from_row {
+    use chrono::{TimeZone, Utc};
+
+    #[derive(Debug)]
+    pub(crate) struct SqliteTaskRow {
+        pub(crate) job: Vec<u8>,
+        pub(crate) id: Option<String>,
+        pub(crate) job_type: Option<String>,
+        pub(crate) status: Option<String>,
+        pub(crate) attempts: Option<i64>,
+        pub(crate) max_attempts: Option<i64>,
+        pub(crate) run_at: Option<i64>,
+        pub(crate) last_result: Option<String>,
+        pub(crate) lock_at: Option<i64>,
+        pub(crate) lock_by: Option<String>,
+        pub(crate) done_at: Option<i64>,
+        pub(crate) priority: Option<i64>,
+        pub(crate) metadata: Option<String>,
+    }
+
+    impl TryInto<apalis_sql::from_row::TaskRow> for SqliteTaskRow {
+        type Error = sqlx::Error;
+
+        fn try_into(self) -> Result<apalis_sql::from_row::TaskRow, Self::Error> {
+            Ok(apalis_sql::from_row::TaskRow {
+                job: self.job,
+                id: self
+                    .id
+                    .ok_or_else(|| sqlx::Error::Protocol("Missing id".into()))?,
+                job_type: self
+                    .job_type
+                    .ok_or_else(|| sqlx::Error::Protocol("Missing job_type".into()))?,
+                status: self
+                    .status
+                    .ok_or_else(|| sqlx::Error::Protocol("Missing status".into()))?,
+                attempts: self
+                    .attempts
+                    .ok_or_else(|| sqlx::Error::Protocol("Missing attempts".into()))?
+                    as usize,
+                max_attempts: self.max_attempts.map(|v| v as usize),
+                run_at: self.run_at.map(|ts| {
+                    Utc.timestamp_opt(ts, 0)
+                        .single()
+                        .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                        .unwrap()
+                }),
+                last_result: self
+                    .last_result
+                    .map(|res| serde_json::from_str(&res).unwrap_or(serde_json::Value::Null)),
+                lock_at: self.lock_at.map(|ts| {
+                    Utc.timestamp_opt(ts, 0)
+                        .single()
+                        .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                        .unwrap()
+                }),
+                lock_by: self.lock_by,
+                done_at: self.done_at.map(|ts| {
+                    Utc.timestamp_opt(ts, 0)
+                        .single()
+                        .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                        .unwrap()
+                }),
+                priority: self.priority.map(|v| v as usize),
+                metadata: self
+                    .metadata
+                    .map(|meta| serde_json::from_str(&meta).unwrap_or(serde_json::Value::Null)),
+            })
+        }
+    }
+}
+
+pub type SqliteTask<Args> = Task<Args, SqlContext, Ulid>;
 pub use callback::{CallbackListener, DbEvent};
 pub use config::Config;
-pub use context::SqliteContext;
 pub use shared::{SharedPostgresError, SharedSqliteStorage};
 pub use sqlx::SqlitePool;
 
-#[cfg(feature = "json")]
-pub type CompactType = String;
-
-// Bytes not yet supported due to sqlx limitations
-#[cfg(feature = "bytes")]
 pub type CompactType = Vec<u8>;
 
 const INSERT_OPERATION: &str = "INSERT";
@@ -319,15 +383,7 @@ impl SqliteStorage<(), (), ()> {
     /// Get sqlite migrations without running them
     #[cfg(feature = "migrate")]
     pub fn migrations() -> sqlx::migrate::Migrator {
-        if cfg!(feature = "bytes") && cfg!(not(feature = "json")) {
-            sqlx::migrate!("./migrations/bytes")
-        } else if cfg!(feature = "json") && cfg!(not(feature = "bytes")) {
-            sqlx::migrate!("./migrations/json")
-        } else {
-            panic!(
-                "One of either the 'json' or 'bytes' feature must be enabled for migrations to work."
-            );
-        }
+        sqlx::migrate!("./migrations")
     }
 }
 
@@ -454,7 +510,7 @@ where
     type Args = Args;
     type IdType = Ulid;
 
-    type Context = SqliteContext;
+    type Context = SqlContext;
 
     type Codec = Decode;
 
@@ -515,7 +571,7 @@ where
     type Args = Args;
     type IdType = Ulid;
 
-    type Context = SqliteContext;
+    type Context = SqlContext;
 
     type Codec = Decode;
 
@@ -678,9 +734,9 @@ mod tests {
             let items = stream::repeat_with(move || {
                 start += 1;
 
-                Task::builder(serde_json::to_string(&start).unwrap())
+                Task::builder(serde_json::to_vec(&start).unwrap())
                     .run_after(Duration::from_secs(1))
-                    .with_ctx(SqliteContext::new().with_priority(start))
+                    .with_ctx(SqlContext::new().with_priority(start))
                     .build()
             })
             .take(ITEMS)
@@ -824,6 +880,7 @@ mod tests {
                 }
             })
             .then(|a: Vec<Summary>, mut worker: WorkerContext| async move {
+                dbg!(&a);
                 worker.emit(&Event::Custom(Box::new(format!(
                     "Generated {} summaries",
                     a.len()

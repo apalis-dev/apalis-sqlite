@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -15,8 +15,7 @@ async-std-comp = ["async-std", "sqlx/runtime-async-std-rustls"]
 async-std-comp-native-tls = ["async-std", "sqlx/runtime-async-std-native-tls"]
 tokio-comp = ["tokio", "sqlx/runtime-tokio-rustls"]
 tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio-native-tls"]
-bytes = []
-json = ["sqlx/json"]
+json = ["apalis-core/json", "sqlx/json"]
 
 [dependencies.sqlx]
 version = "0.8.6"
@@ -26,11 +25,8 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-alpha.6", default-features = false, features = [
-    "sleep",
-    "json",
-] }
-apalis-workflow = { version = "0.1.0-alpha.4" }
+apalis-core = { version = "1.0.0-alpha.7", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-alpha.7" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -40,17 +36,15 @@ thiserror = "2.0.0"
 pin-project = "1.1.10"
 libsqlite3-sys = "0.30.1"
 ulid = { version = "1", features = ["serde"] }
-tower-layer = "0.3.3"
-tower-service = "0.3.3"
 bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.6", features = ["test-utils"] }
-apalis-workflow = { version = "0.1.0-alpha.4" }
+apalis-core = { version = "1.0.0-alpha.7", features = ["test-utils"] }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
+apalis-workflow = { version = "0.1.0-alpha.5" }
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`
 rustdoc-args = ["--cfg", "docsrs"]
-features = ["migrate", "tokio-comp", "json"]
+all-features = true

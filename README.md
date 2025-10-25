@@ -1,12 +1,12 @@
 # apalis-sqlite
 
-Background task processing for Rust using Apalis and SQLite.
+Background task processing for Rust using apalis and sqlite.
 
 ## Features
 
 - **Reliable job queue** using SQLite as the backend.
 - **Multiple storage types**: standard polling and event-driven (hooked) storage.
-- **Custom codecs** for serializing/deserializing job arguments as bytes and json.
+- **Custom codecs** for serializing/deserializing job arguments as bytes.
 - **Heartbeat and orphaned job re-enqueueing** for robust job processing.
 - **Integration with Apalis workers and middleware.**
 
@@ -34,7 +34,7 @@ async fn main() {
         start += 1;
         let task = Task::builder(start)
             .run_after(Duration::from_secs(1))
-            .with_ctx(SqliteContext::new().with_priority(1))
+            .with_ctx(SqlContext::new().with_priority(1))
             .build();
         Ok(task)
     })
@@ -79,7 +79,7 @@ async fn main() {
                 start += 1;
                 Task::builder(serde_json::to_value(&start).unwrap())
                     .run_after(Duration::from_secs(1))
-                    .with_ctx(SqliteContext::new().with_priority(start))
+                    .with_ctx(SqlContext::new().with_priority(start))
                     .build()
             })
             .take(20)
@@ -144,17 +144,10 @@ async fn main() {
 }
 ```
 
-## Migrations
+## Observability
 
-If the `migrate` feature is enabled, you can run built-in migrations with:
-
-```rust,no_run
-use sqlx::SqlitePool;
-#[tokio::main] async fn main() {
-    let pool = SqlitePool::connect(":memory:").await.unwrap();
-    apalis_sqlite::SqliteStorage::setup(&pool).await.unwrap();
-}
-```
+You can track your jobs using [apalis-board](https://github.com/apalis-dev/apalis-board).
+![Task](https://github.com/apalis-dev/apalis-board/raw/master/screenshots/task.png)
 
 ## License
 

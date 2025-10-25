@@ -1,20 +1,16 @@
-use std::any::Any;
-
 use apalis_core::{
     error::{AbortError, BoxDynError},
+    layers::{Layer, Service},
     task::{Parts, status::Status},
     worker::{context::WorkerContext, ext::ack::Acknowledge},
 };
-use apalis_workflow::StepResult;
+use apalis_sql::context::SqlContext;
 use futures::{FutureExt, future::BoxFuture};
 use serde::Serialize;
-use serde_json::Value;
 use sqlx::SqlitePool;
-use tower_layer::Layer;
-use tower_service::Service;
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteTask, context::SqliteContext};
+use crate::SqliteTask;
 
 #[derive(Clone)]
 pub struct SqliteAck {
@@ -26,30 +22,19 @@ impl SqliteAck {
     }
 }
 
-impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
+impl<Res: Serialize + 'static> Acknowledge<Res, SqlContext, Ulid> for SqliteAck {
     type Error = sqlx::Error;
     type Future = BoxFuture<'static, Result<(), Self::Error>>;
     fn ack(
         &mut self,
         res: &Result<Res, BoxDynError>,
-        parts: &Parts<SqliteContext, Ulid>,
+        parts: &Parts<SqlContext, Ulid>,
     ) -> Self::Future {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
 
         // Workflows need special handling to serialize the response correctly
-        let response = match res {
-            Ok(r) => {
-                if let Some(res_ref) = (r as &dyn Any).downcast_ref::<StepResult<CompactType>>() {
-                    let res_deserialized: Result<Value, serde_json::Error> =
-                        serde_json::from_str(&res_ref.0);
-                    serde_json::to_string(&res_deserialized.map_err(|e| e.to_string()))
-                } else {
-                    serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()))
-                }
-            }
-            _ => serde_json::to_string(&res.as_ref().map_err(|e| e.to_string())),
-        };
+        let response = serde_json::to_string(&res.as_ref().map_err(|e| e.to_string()));
 
         let status = calculate_status(parts, res);
         parts.status.store(status.clone());
@@ -85,7 +70,7 @@ impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteA
 }
 
 pub fn calculate_status<Res>(
-    parts: &Parts<SqliteContext, Ulid>,
+    parts: &Parts<SqlContext, Ulid>,
     res: &Result<Res, BoxDynError>,
 ) -> Status {
     match &res {

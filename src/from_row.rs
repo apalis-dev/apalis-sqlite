@@ -4,8 +4,9 @@ use apalis_core::{
     backend::codec::Codec,
     task::{attempt::Attempt, builder::TaskBuilder, status::Status, task_id::TaskId},
 };
+use apalis_sql::context::SqlContext;
 
-use crate::{CompactType, SqliteTask, context::SqliteContext};
+use crate::{CompactType, SqliteTask};
 
 #[derive(Debug)]
 pub(crate) struct TaskRow {
@@ -31,7 +32,7 @@ impl TaskRow {
     where
         D::Error: std::error::Error + Send + Sync + 'static,
     {
-        let ctx = SqliteContext::default()
+        let ctx = SqlContext::default()
             .with_done_at(self.done_at)
             .with_lock_by(self.lock_by)
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
@@ -94,7 +95,7 @@ impl TaskRow {
         Ok(task.build())
     }
     pub fn try_into_task_compact(self) -> Result<SqliteTask<CompactType>, sqlx::Error> {
-        let ctx = SqliteContext::default()
+        let ctx = SqlContext::default()
             .with_done_at(self.done_at)
             .with_lock_by(self.lock_by)
             .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)

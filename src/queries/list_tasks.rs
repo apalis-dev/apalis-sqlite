@@ -2,14 +2,15 @@ use apalis_core::{
     backend::{Backend, Filter, ListAllTasks, ListTasks, codec::Codec},
     task::{Task, status::Status},
 };
+use apalis_sql::from_row::TaskRow;
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::TaskRow};
+use crate::{CompactType, SqlContext, SqliteStorage, SqliteTask, from_row::SqliteTaskRow};
 
 impl<Args, D, F> ListTasks<Args> for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
     D: Codec<Args, Compact = CompactType>,
     D::Error: std::error::Error + Send + Sync + 'static,
     Args: 'static,
@@ -30,7 +31,7 @@ where
             .to_string();
         async move {
             let tasks = sqlx::query_file_as!(
-                TaskRow,
+                SqliteTaskRow,
                 "queries/backend/list_jobs.sql",
                 status,
                 queue,
@@ -40,7 +41,11 @@ where
             .fetch_all(&pool)
             .await?
             .into_iter()
-            .map(|r| r.try_into_task::<D, _>())
+            .map(|r| {
+                let row: TaskRow = r.try_into()?;
+                row.try_into_task::<D, _, Ulid>()
+                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+            })
             .collect::<Result<Vec<_>, _>>()?;
             Ok(tasks)
         }
@@ -50,7 +55,7 @@ where
 impl<Args, D, F> ListAllTasks for SqliteStorage<Args, D, F>
 where
     SqliteStorage<Args, D, F>:
-        Backend<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn list_all_tasks(
         &self,
@@ -68,7 +73,7 @@ where
         let offset = filter.offset() as i32;
         async move {
             let tasks = sqlx::query_file_as!(
-                TaskRow,
+                SqliteTaskRow,
                 "queries/backend/list_all_jobs.sql",
                 status,
                 limit,
@@ -77,7 +82,11 @@ where
             .fetch_all(&pool)
             .await?
             .into_iter()
-            .map(|r| r.try_into_task_compact())
+            .map(|r| {
+                let row: TaskRow = r.try_into()?;
+                row.try_into_task_compact()
+                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+            })
             .collect::<Result<Vec<_>, _>>()?;
             Ok(tasks)
         }

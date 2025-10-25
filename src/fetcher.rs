@@ -14,18 +14,19 @@ use apalis_core::{
     task::Task,
     worker::context::WorkerContext,
 };
+use apalis_sql::{context::SqlContext, from_row::TaskRow};
 use futures::{FutureExt, future::BoxFuture, stream::Stream};
 use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteTask, config::Config, context::SqliteContext, from_row::TaskRow};
+use crate::{CompactType, SqliteTask, config::Config, from_row::SqliteTaskRow};
 
 pub async fn fetch_next<Args, D: Codec<Args, Compact = CompactType>>(
     pool: SqlitePool,
     config: Config,
     worker: WorkerContext,
-) -> Result<Vec<Task<Args, SqliteContext, Ulid>>, sqlx::Error>
+) -> Result<Vec<Task<Args, SqlContext, Ulid>>, sqlx::Error>
 where
     D::Error: std::error::Error + Send + Sync + 'static,
     Args: 'static,
@@ -34,7 +35,7 @@ where
     let buffer_size = config.buffer_size() as i32;
     let worker = worker.name().to_string();
     sqlx::query_file_as!(
-        TaskRow,
+        SqliteTaskRow,
         "queries/backend/fetch_next.sql",
         worker,
         job_type,
@@ -43,7 +44,11 @@ where
     .fetch_all(&pool)
     .await?
     .into_iter()
-    .map(|r| r.try_into_task::<D, Args>())
+    .map(|r| {
+        let row: TaskRow = r.try_into()?;
+        row.try_into_task::<D, Args, Ulid>()
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+    })
     .collect()
 }
 
