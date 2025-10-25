@@ -211,6 +211,7 @@ use apalis_core::{
     },
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
+    layers::Stack,
 };
 use apalis_sql::context::SqlContext;
 use futures::{
@@ -222,7 +223,6 @@ use futures::{
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::{Pool, Sqlite};
 use std::ffi::c_void;
-use tower_layer::Stack;
 use ulid::Ulid;
 
 use crate::{

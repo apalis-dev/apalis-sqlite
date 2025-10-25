@@ -24,6 +24,7 @@ use apalis_core::{
         shared::MakeShared,
     },
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
+    layers::Stack,
 };
 use apalis_sql::{context::SqlContext, from_row::TaskRow};
 use futures::{
@@ -35,7 +36,6 @@ use futures::{
 };
 use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
 use sqlx::SqlitePool;
-use tower_layer::Stack;
 use ulid::Ulid;
 
 pub struct SharedSqliteStorage<Decode> {

@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-alpha.2"
+version = "1.0.0-alpha.3"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -25,11 +25,8 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-alpha.6", default-features = false, features = [
-    "sleep",
-], path = "../apalis/packages/apalis-core" }
-apalis-sql = { version = "1.0.0-alpha.6", path = "../apalis/packages/apalis-sql" }
-apalis-workflow = { version = "0.1.0-alpha.4", path = "../apalis/packages/apalis-workflow" }
+apalis-core = { version = "1.0.0-alpha.7", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-alpha.7" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -39,17 +36,13 @@ thiserror = "2.0.0"
 pin-project = "1.1.10"
 libsqlite3-sys = "0.30.1"
 ulid = { version = "1", features = ["serde"] }
-tower-layer = "0.3.3"
-tower-service = "0.3.3"
 bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.6", features = [
-    "test-utils",
-], path = "../apalis/packages/apalis-core" }
-apalis-workflow = { version = "0.1.0-alpha.4", path = "../apalis/packages/apalis-workflow" }
+apalis-core = { version = "1.0.0-alpha.7", features = ["test-utils"] }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
+apalis-workflow = { version = "0.1.0-alpha.5" }
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`
