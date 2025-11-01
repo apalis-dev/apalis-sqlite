@@ -121,6 +121,7 @@ impl<S> Layer<S> for LockTaskLayer {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct LockTaskService<S> {
     inner: S,
     pool: SqlitePool,
