@@ -1,12 +1,14 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-alpha.3"
+version = "1.0.0-alpha.4"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
 repository = "https://github.com/apalis-dev/apalis-sqlite"
 license = "MIT"
 description = "Background task processing for rust using apalis and sqlite"
+keywords = ["apalis", "background-jobs", "task-queue", "sqlite", "async"]
+categories = ["asynchronous", "database"]
 
 [features]
 default = ["migrate", "json"]
@@ -25,8 +27,8 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-alpha.7", features = ["sleep"] }
-apalis-sql = { version = "1.0.0-alpha.7" }
+apalis-core = { version = "1.0.0-alpha.8", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-alpha.8" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -40,7 +42,7 @@ bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.7", features = ["test-utils"] }
+apalis-core = { version = "1.0.0-alpha.8", features = ["test-utils"] }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
 apalis-workflow = { version = "0.1.0-alpha.5" }
 
