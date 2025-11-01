@@ -12,7 +12,7 @@ use ulid::Ulid;
 
 use crate::SqliteTask;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SqliteAck {
     pool: SqlitePool,
 }
@@ -99,6 +99,7 @@ pub async fn lock_task(
     Ok(())
 }
 
+#[derive(Clone, Debug)]
 pub struct LockTaskLayer {
     pool: SqlitePool,
 }
