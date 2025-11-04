@@ -184,18 +184,10 @@
 //! }
 //! ```
 //!
-//! ## Migrations
+//! ## Observability
 //!
-//! If the `migrate` feature is enabled, you can run built-in migrations with:
-//!
-//! ```rust,no_run
-//! # use sqlx::SqlitePool;
-//! # use apalis_sqlite::SqliteStorage;
-//! # #[tokio::main] async fn main() {
-//! let pool = SqlitePool::connect(":memory:").await.unwrap();
-//! SqliteStorage::setup(&pool).await.unwrap();
-//! # }
-//! ```
+//! You can track your jobs using [apalis-board](https://github.com/apalis-dev/apalis-board).
+//! ![Task](https://github.com/apalis-dev/apalis-board/raw/master/screenshots/task.png)
 //!
 //! ## License
 //!
