@@ -23,14 +23,14 @@ use apalis_core::{
         codec::{Codec, json::JsonCodec},
         shared::MakeShared,
     },
-    worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
     layers::Stack,
+    worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
 use apalis_sql::{context::SqlContext, from_row::TaskRow};
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
-    future::{self, BoxFuture, Shared},
+    future::{BoxFuture, Shared},
     lock::Mutex,
     stream::{self, BoxStream, select},
 };
@@ -264,7 +264,7 @@ where
             "SharedSqliteStorage",
         );
         let starter = stream::once(init)
-            .filter_map(|s| future::ready(s.ok().map(|_| Ok(None::<SqliteTask<Args>>))))
+            .map_ok(|_| None) // Noop after initial heartbeat
             .boxed();
         let lazy_fetcher = self
             .fetcher

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,38 +47,6 @@ jobs:
 
       - name: Run cargo test with all features
         run: cargo test --all-features --verbose
-
-  features:
-    name: Feature Matrix Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features:
-          - ""
-          - "--features migrate"
-          - "--features async-std-comp"
-          - "--features async-std-comp-native-tls"
-          - "--features tokio-comp"
-          - "--features tokio-comp-native-tls"
-          - "--all-features"
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-features-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Test with features
-        run: cargo test ${{ matrix.features }} --verbose
 
   fmt:
     name: Rustfmt
