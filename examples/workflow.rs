@@ -1,6 +1,6 @@
 use apalis::prelude::*;
 use apalis_sqlite::SqliteStorage;
-use apalis_workflow::{TaskFlowSink, WorkFlow};
+use apalis_workflow::{TaskFlowSink, Workflow};
 use sqlx::SqlitePool;
 
 #[tokio::main]
@@ -20,7 +20,7 @@ async fn main() {
         assert_eq!(task, 142);
         worker.stop().unwrap();
     }
-    let workflow = WorkFlow::new("test_workflow")
+    let workflow = Workflow::new("test_workflow")
         .then(task1)
         .then(task2)
         .then(task3);

@@ -138,14 +138,14 @@
 //! # use futures::StreamExt;
 //! # use futures::SinkExt;
 //! # use apalis_core::worker::builder::WorkerBuilder;
-//! # use apalis_workflow::WorkFlow;
+//! # use apalis_workflow::Workflow;
 //! # use apalis_workflow::WorkflowError;
 //! # use apalis_core::worker::event::Event;
 //! # use apalis_core::backend::WeakTaskSink;
 //! # use apalis_core::worker::ext::event_listener::EventListenerExt;
 //! #[tokio::main]
 //! async fn main() {
-//!     let workflow = WorkFlow::new("odd-numbers-workflow")
+//!     let workflow = Workflow::new("odd-numbers-workflow")
 //!         .then(|a: usize| async move {
 //!             Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>())
 //!         })
@@ -694,7 +694,7 @@ where
 mod tests {
     use std::time::Duration;
 
-    use apalis_workflow::{WorkFlow, WorkflowError};
+    use apalis_workflow::{Workflow, WorkflowError};
     use chrono::Local;
 
     use apalis_core::{
@@ -793,7 +793,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_workflow() {
-        let workflow = WorkFlow::new("odd-numbers-workflow")
+        let workflow = Workflow::new("odd-numbers-workflow")
             .then(|a: usize| async move { Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>()) })
             .filter_map(|x| async move { if x % 2 != 0 { Some(x) } else { None } })
             .filter_map(|x| async move { if x % 3 != 0 { Some(x) } else { None } })
@@ -855,7 +855,7 @@ mod tests {
             sentiment: Option<String>,
         }
 
-        let workflow = WorkFlow::new("text-pipeline")
+        let workflow = Workflow::new("text-pipeline")
             // Step 1: Preprocess input (e.g., tokenize, lowercase)
             .then(|input: UserInput, mut worker: WorkerContext| async move {
                 worker.emit(&Event::Custom(Box::new(format!(

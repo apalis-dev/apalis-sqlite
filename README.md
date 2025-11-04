@@ -105,7 +105,7 @@ async fn main() {
 ```rust,no_run
 #[tokio::main]
 async fn main() {
-    let workflow = WorkFlow::new("odd-numbers-workflow")
+    let workflow = Workflow::new("odd-numbers-workflow")
         .then(|a: usize| async move {
             Ok::<_, WorkflowError>((0..=a).collect::<Vec<_>>())
         })
