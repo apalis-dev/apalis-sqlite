@@ -98,7 +98,7 @@
 //!             let mut start = 0;
 //!             let items = stream::repeat_with(move || {
 //!                 start += 1;
-//!                 Task::builder(serde_json::to_string(&start).unwrap())
+//!                 Task::builder(serde_json::to_vec(&start).unwrap())
 //!                     .run_after(Duration::from_secs(1))
 //!                     .with_ctx(SqlContext::new().with_priority(start))
 //!                     .build()
@@ -209,11 +209,12 @@ use apalis_core::{
         Backend, TaskStream,
         codec::{Codec, json::JsonCodec},
     },
+    features_table,
+    layers::Stack,
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
-    layers::Stack,
 };
-use apalis_sql::context::SqlContext;
+pub use apalis_sql::context::SqlContext;
 use futures::{
     FutureExt, StreamExt, TryFutureExt, TryStreamExt,
     channel::mpsc,
@@ -326,6 +327,35 @@ pub type CompactType = Vec<u8>;
 const INSERT_OPERATION: &str = "INSERT";
 const JOBS_TABLE: &str = "Jobs";
 
+/// SqliteStorage is a storage backend for apalis using sqlite as the database.
+///
+/// It supports both standard polling and event-driven (hooked) storage mechanisms.
+///
+#[doc = features_table! {
+    setup = r#"
+        # {
+        #   use apalis_sqlite::SqliteStorage;
+        #   use sqlx::SqlitePool;
+        #   let pool = SqlitePool::connect(":memory:").await.unwrap();
+        #   SqliteStorage::setup(&pool).await.unwrap();
+        #   SqliteStorage::new(&pool)
+        # };
+    "#,
+
+    Backend => supported("Supports storage and retrieval of tasks", true),
+    TaskSink => supported("Ability to push new tasks", true),
+    Serialization => supported("Serialization support for arguments", true),
+    WebUI => supported("Expose a web interface for monitoring tasks", true),
+    FetchById => supported("Allow fetching a task by its ID", false),
+    RegisterWorker => supported("Allow registering a worker with the backend", false),
+    MakeShared => supported("Share one connection across multiple workers via [`SharedSqliteStorage`]", false),
+    Workflow => supported("Flexible enough to support workflows", true),
+    WaitForCompletion => supported("Wait for tasks to complete without blocking", true),
+    ResumeById => supported("Resume a task by its ID", false),
+    ResumeAbandoned => supported("Resume abandoned tasks", false),
+    ListWorkers => supported("List all workers registered with the backend", false),
+    ListTasks => supported("List all tasks in the backend", false),
+}]
 #[pin_project::pin_project]
 pub struct SqliteStorage<T, C, Fetcher> {
     pool: Pool<Sqlite>,
@@ -620,30 +650,28 @@ where
             "SqliteStorageWithHook",
         );
         let p = pool.clone();
-        let register_worker = stream::once(
-            register_worker
-                .and_then(|_| async move {
-                    // This is still a little tbd, but the idea is to test the update hook
-                    let mut conn = p.acquire().await?;
-                    // Get raw sqlite3* handle
-                    let handle: *mut sqlite3 =
-                        conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
+        let register_worker = stream::once(register_worker.map_ok(|_| None));
+        let register_listener = stream::once(async move {
+            // This is still a little tbd, but the idea is to test the update hook
+            let mut conn = p.acquire().await?;
+            // Get raw sqlite3* handle
+            let handle: *mut sqlite3 = conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
 
-                    // Put sender in a Box so it has a stable memory address
-                    let tx_box = Box::new(tx);
-                    let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
-
-                    unsafe {
-                        sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
-                    }
-                    Ok(())
-                })
-                .map(|_| Ok(None)),
-        );
+            // Put sender in a Box so it has a stable memory address
+            let tx_box = Box::new(tx);
+            let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
+            unsafe {
+                sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
+            }
+            Ok(None)
+        });
         let eager_fetcher: SqlitePollFetcher<Args, CompactType, Decode> =
             SqlitePollFetcher::new(&self.pool, &self.config, &worker);
         let lazy_fetcher = listener
             .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))
+            .inspect(|db_event| {
+                log::debug!("Received DB event: {:?}", db_event);
+            })
             .ready_chunks(self.config.buffer_size())
             .then(move |_| fetch_next::<Args, Decode>(pool.clone(), config.clone(), worker.clone()))
             .flat_map(|res| match res {
@@ -656,6 +684,7 @@ where
             });
 
         register_worker
+            .chain(register_listener)
             .chain(select(lazy_fetcher, eager_fetcher))
             .boxed()
     }
@@ -716,7 +745,9 @@ mod tests {
     #[tokio::test]
     async fn hooked_worker() {
         const ITEMS: usize = 20;
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        let pool = SqlitePool::connect(":memory:")
+            .await
+            .unwrap();
         SqliteStorage::setup(&pool).await.unwrap();
 
         let lazy_strategy = StrategyBuilder::new()
@@ -735,7 +766,7 @@ mod tests {
                 start += 1;
 
                 Task::builder(serde_json::to_vec(&start).unwrap())
-                    .run_after(Duration::from_secs(1))
+                    // .run_after(Duration::from_secs(1))
                     .with_ctx(SqlContext::new().with_priority(start))
                     .build()
             })

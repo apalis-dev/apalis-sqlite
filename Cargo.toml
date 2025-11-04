@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-alpha.5"
+version = "1.0.0-alpha.6"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -27,8 +27,8 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-alpha.8", features = ["sleep"] }
-apalis-sql = { version = "1.0.0-alpha.8" }
+apalis-core = { version = "1.0.0-alpha.9", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-alpha.9" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -42,9 +42,11 @@ bytes = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis-core = { version = "1.0.0-alpha.8", features = ["test-utils"] }
+apalis = { version = "1.0.0-alpha.9" }
 apalis-sqlite = { path = ".", features = ["migrate", "tokio-comp"] }
-apalis-workflow = { version = "0.1.0-alpha.5" }
+apalis-workflow = { version = "0.1.0-alpha.6" }
+
+futures-util = "0.3.31"
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`

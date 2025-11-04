@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO\n    Workers (id, worker_type, storage_name, layers, last_seen, started_at)\nVALUES (\n    ?1,\n    ?2,\n    ?3,\n    ?4,\n    strftime('%s', 'now'),\n    strftime('%s', 'now')\n)\nON CONFLICT(id) DO UPDATE SET\n    worker_type = excluded.worker_type,\n    storage_name = excluded.storage_name,\n    layers = excluded.layers,\n    last_seen = excluded.last_seen,\n    started_at = excluded.started_at,\n    -- Force a constraint violation to throw an error\n    id = CASE\n        WHEN strftime('%s', 'now') - Workers.last_seen <= ?5\n        THEN NULL  -- This will fail if id has NOT NULL constraint\n        ELSE excluded.id\n    END\nWHERE\n    strftime('%s', 'now') - Workers.last_seen > ?5;\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "19af6c8445ee82d9c4a54100b2b2dffad5e4a7992174c82a3ef1937e4d97cc71"
+}

@@ -54,10 +54,7 @@ pub async fn push_tasks(
         let priority = task.parts.ctx.priority();
         let args = task.args;
         // Use specified queue if specified, otherwise use default
-        let job_type = match task.parts.queue {
-            Some(ref queue) => queue.to_string(),
-            None => cfg.queue().to_string(),
-        };
+        let job_type = cfg.queue().to_string();
         let meta = serde_json::to_string(&task.parts.ctx.meta()).unwrap_or_default();
         sqlx::query_file!(
             "queries/task/sink.sql",
