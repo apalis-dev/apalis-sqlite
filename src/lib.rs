@@ -670,7 +670,7 @@ where
         let lazy_fetcher = listener
             .filter(|a| ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE))
             .inspect(|db_event| {
-                log::debug!("Received DB event: {:?}", db_event);
+                log::debug!("Received DB event: {db_event:?}");
             })
             .ready_chunks(self.config.buffer_size())
             .then(move |_| fetch_next::<Args, Decode>(pool.clone(), config.clone(), worker.clone()))
@@ -745,9 +745,7 @@ mod tests {
     #[tokio::test]
     async fn hooked_worker() {
         const ITEMS: usize = 20;
-        let pool = SqlitePool::connect(":memory:")
-            .await
-            .unwrap();
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
         SqliteStorage::setup(&pool).await.unwrap();
 
         let lazy_strategy = StrategyBuilder::new()
