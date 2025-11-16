@@ -7,6 +7,7 @@ use crate::{
     queries::{reenqueue_orphaned::reenqueue_orphaned, register_worker::register_worker},
 };
 
+/// Send a keep-alive signal to the database to indicate that the worker is still active
 pub async fn keep_alive(
     pool: SqlitePool,
     config: Config,
@@ -26,17 +27,19 @@ pub async fn keep_alive(
     Ok(())
 }
 
+/// Perform the initial heartbeat and registration of the worker
 pub async fn initial_heartbeat(
     pool: SqlitePool,
     config: Config,
     worker: WorkerContext,
     storage_type: &str,
 ) -> Result<(), sqlx::Error> {
-    reenqueue_orphaned(pool.clone(), config.clone()).await?;
+    reenqueue_orphaned(pool.clone(), &config).await?;
     register_worker(pool, config, worker, storage_type).await?;
     Ok(())
 }
 
+/// Create a stream that sends keep-alive signals at regular intervals
 pub fn keep_alive_stream(
     pool: SqlitePool,
     config: Config,

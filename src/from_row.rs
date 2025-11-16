@@ -1,16 +1,8 @@
-use std::str::FromStr;
-
-use apalis_core::{
-    backend::codec::Codec,
-    task::{attempt::Attempt, builder::TaskBuilder, status::Status, task_id::TaskId},
-};
-use apalis_sql::context::SqlContext;
-
-use crate::{CompactType, SqliteTask};
+use chrono::{TimeZone, Utc};
 
 #[derive(Debug)]
-pub(crate) struct TaskRow {
-    pub(crate) job: CompactType,
+pub(crate) struct SqliteTaskRow {
+    pub(crate) job: Vec<u8>,
     pub(crate) id: Option<String>,
     pub(crate) job_type: Option<String>,
     pub(crate) status: Option<String>,
@@ -25,119 +17,52 @@ pub(crate) struct TaskRow {
     pub(crate) metadata: Option<String>,
 }
 
-impl TaskRow {
-    pub fn try_into_task<D: Codec<Args, Compact = CompactType>, Args: 'static>(
-        self,
-    ) -> Result<SqliteTask<Args>, sqlx::Error>
-    where
-        D::Error: std::error::Error + Send + Sync + 'static,
-    {
-        let ctx = SqlContext::default()
-            .with_done_at(self.done_at)
-            .with_lock_by(self.lock_by)
-            .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
-            .with_last_result(self.last_result)
-            .with_priority(self.priority.unwrap_or(0) as i32)
-            .with_meta(
-                self.metadata
-                    .map(|m| serde_json::from_str(&m).unwrap_or_default())
-                    .unwrap_or_default(),
-            )
-            .with_queue(
-                self.job_type
-                    .ok_or(sqlx::Error::ColumnNotFound("job_type".to_owned()))?,
-            )
-            .with_lock_at(self.lock_at);
+impl TryInto<apalis_sql::from_row::TaskRow> for SqliteTaskRow {
+    type Error = sqlx::Error;
 
-        // Optimize for the case where Args and CompactType are the same type
-        // to avoid unnecessary serialization/deserialization.
-        // That comes at the cost of using unsafe code, and leaking memory
-        let args = if std::any::TypeId::of::<Args>() == std::any::TypeId::of::<CompactType>() {
-            // SAFETY: We've verified that Args and CompactType are the same type.
-            // We use ptr::read to move the value out without calling drop on self.job.
-            // Then we use mem::forget to prevent self from being dropped (which would
-            // try to drop self.job again, causing a double free).
-            unsafe {
-                let job_ptr = &self.job as *const CompactType as *const Args;
-                let args = std::ptr::read(job_ptr);
-                std::mem::forget(self.job);
-                args
-            }
-        } else {
-            D::decode(&self.job).map_err(|e| sqlx::Error::Decode(e.into()))?
-        };
-        let task = TaskBuilder::new(args)
-            .with_ctx(ctx)
-            .with_attempt(Attempt::new_with_value(
-                self.attempts
-                    .ok_or(sqlx::Error::ColumnNotFound("attempts".to_owned()))?
-                    as usize,
-            ))
-            .with_status(
-                self.status
-                    .ok_or(sqlx::Error::ColumnNotFound("status".to_owned()))
-                    .and_then(|s| {
-                        Status::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
-                    })?,
-            )
-            .with_task_id(
-                self.id
-                    .ok_or(sqlx::Error::ColumnNotFound("task_id".to_owned()))
-                    .and_then(|s| {
-                        TaskId::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
-                    })?,
-            )
-            .run_at_timestamp(
-                self.run_at
-                    .ok_or(sqlx::Error::ColumnNotFound("run_at".to_owned()))?
-                    as u64,
-            );
-        Ok(task.build())
-    }
-    pub fn try_into_task_compact(self) -> Result<SqliteTask<CompactType>, sqlx::Error> {
-        let ctx = SqlContext::default()
-            .with_done_at(self.done_at)
-            .with_lock_by(self.lock_by)
-            .with_max_attempts(self.max_attempts.unwrap_or(25) as i32)
-            .with_last_result(self.last_result)
-            .with_priority(self.priority.unwrap_or(0) as i32)
-            .with_meta(
-                self.metadata
-                    .map(|m| serde_json::from_str(&m).unwrap_or_default())
-                    .unwrap_or_default(),
-            )
-            .with_queue(
-                self.job_type
-                    .ok_or(sqlx::Error::ColumnNotFound("job_type".to_owned()))?,
-            )
-            .with_lock_at(self.lock_at);
-
-        let task = TaskBuilder::new(self.job)
-            .with_ctx(ctx)
-            .with_attempt(Attempt::new_with_value(
-                self.attempts
-                    .ok_or(sqlx::Error::ColumnNotFound("attempts".to_owned()))?
-                    as usize,
-            ))
-            .with_status(
-                self.status
-                    .ok_or(sqlx::Error::ColumnNotFound("status".to_owned()))
-                    .and_then(|s| {
-                        Status::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
-                    })?,
-            )
-            .with_task_id(
-                self.id
-                    .ok_or(sqlx::Error::ColumnNotFound("task_id".to_owned()))
-                    .and_then(|s| {
-                        TaskId::from_str(&s).map_err(|e| sqlx::Error::Decode(e.into()))
-                    })?,
-            )
-            .run_at_timestamp(
-                self.run_at
-                    .ok_or(sqlx::Error::ColumnNotFound("run_at".to_owned()))?
-                    as u64,
-            );
-        Ok(task.build())
+    fn try_into(self) -> Result<apalis_sql::from_row::TaskRow, Self::Error> {
+        Ok(apalis_sql::from_row::TaskRow {
+            job: self.job,
+            id: self
+                .id
+                .ok_or_else(|| sqlx::Error::Protocol("Missing id".into()))?,
+            job_type: self
+                .job_type
+                .ok_or_else(|| sqlx::Error::Protocol("Missing job_type".into()))?,
+            status: self
+                .status
+                .ok_or_else(|| sqlx::Error::Protocol("Missing status".into()))?,
+            attempts: self
+                .attempts
+                .ok_or_else(|| sqlx::Error::Protocol("Missing attempts".into()))?
+                as usize,
+            max_attempts: self.max_attempts.map(|v| v as usize),
+            run_at: self.run_at.map(|ts| {
+                Utc.timestamp_opt(ts, 0)
+                    .single()
+                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                    .unwrap()
+            }),
+            last_result: self
+                .last_result
+                .map(|res| serde_json::from_str(&res).unwrap_or(serde_json::Value::Null)),
+            lock_at: self.lock_at.map(|ts| {
+                Utc.timestamp_opt(ts, 0)
+                    .single()
+                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                    .unwrap()
+            }),
+            lock_by: self.lock_by,
+            done_at: self.done_at.map(|ts| {
+                Utc.timestamp_opt(ts, 0)
+                    .single()
+                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
+                    .unwrap()
+            }),
+            priority: self.priority.map(|v| v as usize),
+            metadata: self
+                .metadata
+                .map(|meta| serde_json::from_str(&meta).unwrap_or(serde_json::Value::Null)),
+        })
     }
 }

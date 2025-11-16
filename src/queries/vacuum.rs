@@ -1,12 +1,11 @@
-use apalis_core::backend::{Backend, Vacuum};
+use apalis_core::backend::{BackendExt, Vacuum};
 use ulid::Ulid;
 
 use crate::{CompactType, SqliteStorage};
 
 impl<Args, F, Decode> Vacuum for SqliteStorage<Args, Decode, F>
 where
-    SqliteStorage<Args, Decode, F>:
-        Backend<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
+    Self: BackendExt<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
     F: Send,
     Decode: Send,
     Args: Send,

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, str::FromStr, vec};
 
 use apalis_core::{
-    backend::{Backend, TaskResult, WaitForCompletion},
+    backend::{BackendExt, TaskResult, WaitForCompletion},
     task::{status::Status, task_id::TaskId},
 };
 use futures::{StreamExt, stream::BoxStream};
@@ -19,8 +19,7 @@ struct ResultRow {
 
 impl<O: 'static + Send, Args, F, Decode> WaitForCompletion<O> for SqliteStorage<Args, Decode, F>
 where
-    SqliteStorage<Args, Decode, F>:
-        Backend<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
+    Self: BackendExt<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
     Result<O, String>: DeserializeOwned,
 {
     type ResultStream = BoxStream<'static, Result<TaskResult<O>, Self::Error>>;

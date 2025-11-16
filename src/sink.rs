@@ -15,7 +15,9 @@ use crate::{CompactType, SqliteStorage, SqliteTask, config::Config};
 
 type FlushFuture = BoxFuture<'static, Result<(), Arc<sqlx::Error>>>;
 
+/// Sink for pushing tasks into the sqlite backend
 #[pin_project::pin_project]
+#[derive(Debug)]
 pub struct SqliteSink<Args, Compact, Codec> {
     pool: SqlitePool,
     config: Config,
@@ -37,6 +39,7 @@ impl<Args, Compact, Codec> Clone for SqliteSink<Args, Compact, Codec> {
     }
 }
 
+/// Push a batch of tasks into the database
 pub async fn push_tasks(
     pool: SqlitePool,
     cfg: Config,
@@ -75,6 +78,8 @@ pub async fn push_tasks(
 }
 
 impl<Args, Compact, Codec> SqliteSink<Args, Compact, Codec> {
+    /// Create a new SqliteSink
+    #[must_use]
     pub fn new(pool: &SqlitePool, config: &Config) -> Self {
         Self {
             pool: pool.clone(),

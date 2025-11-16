@@ -1,4 +1,4 @@
-use apalis_core::backend::{Backend, Metrics, Statistic};
+use apalis_core::backend::{BackendExt, Metrics, Statistic};
 use ulid::Ulid;
 
 use crate::{CompactType, SqlContext, SqliteStorage};
@@ -16,8 +16,8 @@ struct StatisticRow {
 
 impl<Args, D, F> Metrics for SqliteStorage<Args, D, F>
 where
-    SqliteStorage<Args, D, F>:
-        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self:
+        BackendExt<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn global(&self) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
         let pool = self.pool.clone();
@@ -41,7 +41,7 @@ where
         queue_id: &str,
     ) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
         let pool = self.pool.clone();
-        let queue_id = queue_id.to_string();
+        let queue_id = queue_id.to_owned();
         async move {
             let rec = sqlx::query_file_as!(
                 StatisticRow,

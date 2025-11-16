@@ -5,9 +5,10 @@ use sqlx::SqlitePool;
 
 use crate::Config;
 
+/// Re-enqueue tasks that were being processed by workers that have not sent a keep-alive signal within the specified duration
 pub fn reenqueue_orphaned(
     pool: SqlitePool,
-    config: Config,
+    config: &Config,
 ) -> impl Future<Output = Result<u64, sqlx::Error>> + Send {
     let dead_for = config.reenqueue_orphaned_after().as_secs() as i64;
     let queue = config.queue().to_string();
@@ -33,19 +34,20 @@ pub fn reenqueue_orphaned(
     }
 }
 
+/// Create a stream that periodically re-enqueues orphaned tasks
 pub fn reenqueue_orphaned_stream(
     pool: SqlitePool,
     config: Config,
     interval: Duration,
 ) -> impl Stream<Item = Result<u64, sqlx::Error>> + Send {
-    let config = config.clone();
+    let config = config;
     stream::unfold((), move |_| {
         let pool = pool.clone();
         let config = config.clone();
         let interval = apalis_core::timer::Delay::new(interval);
         let fut = async move {
             interval.await;
-            reenqueue_orphaned(pool, config).await
+            reenqueue_orphaned(pool, &config).await
         };
         fut.map(|res| Some((res, ())))
     })

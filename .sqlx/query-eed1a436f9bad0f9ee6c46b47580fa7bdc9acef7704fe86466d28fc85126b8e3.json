@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE Jobs\nSET\n    status = 'Queued',\n    lock_at = strftime('%s', 'now')\nWHERE ROWID IN (\n    SELECT ROWID\n    FROM Jobs\n    WHERE job_type IN (\n            SELECT value FROM json_each(?1)\n        )\n        AND status = 'Pending'\n        AND lock_by IS NULL\n        AND (\n            run_at IS NULL\n            OR run_at <= strftime('%s', 'now')\n        )\n        AND ROWID IN (\n            SELECT value FROM json_each(?2)\n        )\n    ORDER BY\n        priority DESC,\n        run_at ASC,\n        id ASC\n    LIMIT ?3\n)\nRETURNING *;\n",
+  "query": "UPDATE\n    Jobs\nSET\n    status = 'Queued',\n    lock_at = strftime('%s', 'now')\nWHERE\n    ROWID IN (\n        SELECT\n            ROWID\n        FROM\n            Jobs\n        WHERE\n            job_type IN (\n                SELECT\n                    value\n                FROM\n                    json_each(?1)\n            )\n            AND (\n                (\n                    status = 'Pending'\n                    AND lock_by IS NULL\n                )\n                OR (\n                    status = 'Failed'\n                    AND attempts < max_attempts\n                )\n            )\n            AND (\n                run_at IS NULL\n                OR run_at <= strftime('%s', 'now')\n            )\n            AND ROWID IN (\n                SELECT\n                    value\n                FROM\n                    json_each(?2)\n            )\n        ORDER BY\n            priority DESC,\n            run_at ASC,\n            id ASC\n        LIMIT\n            ?3\n    ) RETURNING *;\n",
   "describe": {
     "columns": [
       {
@@ -88,5 +88,5 @@
       true
     ]
   },
-  "hash": "61843a18bffdee192cd01f1537f0f03d75403970fc8347d0f017f04d746b2b98"
+  "hash": "eed1a436f9bad0f9ee6c46b47580fa7bdc9acef7704fe86466d28fc85126b8e3"
 }
