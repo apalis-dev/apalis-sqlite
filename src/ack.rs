@@ -69,7 +69,7 @@ impl<Res: Serialize + 'static> Acknowledge<Res, SqlContext, Ulid> for SqliteAck 
     }
 }
 
-pub fn calculate_status<Res>(
+pub(crate) fn calculate_status<Res>(
     parts: &Parts<SqlContext, Ulid>,
     res: &Result<Res, BoxDynError>,
 ) -> Status {
@@ -83,7 +83,7 @@ pub fn calculate_status<Res>(
     }
 }
 
-pub async fn lock_task(
+pub(crate) async fn lock_task(
     pool: &SqlitePool,
     task_id: &Ulid,
     worker_id: &str,
@@ -145,7 +145,7 @@ where
         self.inner.poll_ready(cx).map_err(|e| e.into())
     }
 
-    fn call(&mut self, req: SqliteTask<Args>) -> Self::Future {
+    fn call(&mut self, mut req: SqliteTask<Args>) -> Self::Future {
         let pool = self.pool.clone();
         let worker_id = req
             .parts
@@ -163,9 +163,11 @@ where
                 .boxed();
             }
         };
+        req.parts.ctx = req.parts.ctx.with_lock_by(Some(worker_id.clone()));
         let fut = self.inner.call(req);
         async move {
             lock_task(&pool, &task_id, &worker_id).await?;
+
             fut.await.map_err(|e| e.into())
         }
         .boxed()

@@ -1,4 +1,4 @@
-use apalis_core::backend::{Backend, ListQueues, QueueInfo};
+use apalis_core::backend::{BackendExt, ListQueues, QueueInfo};
 use ulid::Ulid;
 
 use crate::{CompactType, SqlContext, SqliteStorage};
@@ -12,7 +12,7 @@ struct QueueInfoRow {
 
 impl From<QueueInfoRow> for QueueInfo {
     fn from(row: QueueInfoRow) -> Self {
-        QueueInfo {
+        Self {
             name: row.name,
             stats: serde_json::from_str(&row.stats).unwrap(),
             workers: serde_json::from_str(&row.workers).unwrap(),
@@ -23,8 +23,8 @@ impl From<QueueInfoRow> for QueueInfo {
 
 impl<Args, D, F> ListQueues for SqliteStorage<Args, D, F>
 where
-    SqliteStorage<Args, D, F>:
-        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self:
+        BackendExt<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn list_queues(&self) -> impl Future<Output = Result<Vec<QueueInfo>, Self::Error>> + Send {
         let pool = self.pool.clone();

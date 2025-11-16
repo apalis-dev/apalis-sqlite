@@ -10,8 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `apalis-board` support
 - Workflow support
+- Event driven listener
 
 ### Changed
 
 - Moved from monorepo
+
+
+
+Previous Document: https://github.com/apalis-dev/apalis/blob/main/CHANGELOG.md

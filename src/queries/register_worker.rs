@@ -3,6 +3,7 @@ use sqlx::SqlitePool;
 
 use crate::Config;
 
+/// Register a new worker in the database
 pub async fn register_worker(
     pool: SqlitePool,
     config: Config,

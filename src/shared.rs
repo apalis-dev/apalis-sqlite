@@ -1,7 +1,6 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
-    ffi::c_void,
     future::ready,
     marker::PhantomData,
     pin::Pin,
@@ -10,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    CompactType, Config, INSERT_OPERATION, JOBS_TABLE, SqliteStorage, SqliteTask,
+    CompactType, Config, JOBS_TABLE, SqliteStorage, SqliteTask,
     ack::{LockTaskLayer, SqliteAck},
     callback::{DbEvent, update_hook_callback},
     fetcher::SqlitePollFetcher,
@@ -19,7 +18,7 @@ use crate::{
 use crate::{from_row::SqliteTaskRow, sink::SqliteSink};
 use apalis_core::{
     backend::{
-        Backend, TaskStream,
+        Backend, BackendExt, TaskStream,
         codec::{Codec, json::JsonCodec},
         shared::MakeShared,
     },
@@ -34,10 +33,11 @@ use futures::{
     lock::Mutex,
     stream::{self, BoxStream, select},
 };
-use libsqlite3_sys::{sqlite3, sqlite3_update_hook};
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool, pool::PoolOptions, sqlite::SqliteOperation};
 use ulid::Ulid;
 
+/// Shared Sqlite storage backend that can be used across multiple workers
+#[derive(Clone, Debug)]
 pub struct SharedSqliteStorage<Decode> {
     pool: SqlitePool,
     registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<CompactType>>>>>,
@@ -45,11 +45,36 @@ pub struct SharedSqliteStorage<Decode> {
     _marker: PhantomData<Decode>,
 }
 
-impl SharedSqliteStorage<JsonCodec<CompactType>> {
-    pub fn new(pool: SqlitePool) -> Self {
-        SharedSqliteStorage::new_with_codec(pool)
+impl<Decode> SharedSqliteStorage<Decode> {
+    /// Get a reference to the underlying Sqlite connection pool
+    #[must_use]
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
     }
-    pub fn new_with_codec<Codec>(pool: SqlitePool) -> SharedSqliteStorage<Codec> {
+}
+
+impl SharedSqliteStorage<JsonCodec<CompactType>> {
+    /// Create a new shared Sqlite storage backend with the given database URL
+    #[must_use]
+    pub fn new(url: &str) -> Self {
+        Self::new_with_codec(url)
+    }
+    /// Create a new shared Sqlite storage backend with the given database URL and codec
+    #[must_use]
+    pub fn new_with_codec<Codec>(url: &str) -> SharedSqliteStorage<Codec> {
+        let (tx, rx) = mpsc::unbounded::<DbEvent>();
+        let pool = PoolOptions::<Sqlite>::new()
+            .after_connect(move |conn, _meta| {
+                let mut tx = tx.clone();
+                Box::pin(async move {
+                    let mut lock_handle = conn.lock_handle().await?;
+                    lock_handle.set_update_hook(move |ev| update_hook_callback(ev, &mut tx));
+                    Ok(())
+                })
+            })
+            .connect_lazy(url)
+            .expect("Failed to create Sqlite pool");
+
         let registry: Arc<Mutex<HashMap<String, Sender<SqliteTask<CompactType>>>>> =
             Arc::new(Mutex::new(HashMap::default()));
         let p = pool.clone();
@@ -57,23 +82,8 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
         SharedSqliteStorage {
             pool,
             drive: async move {
-                let (tx, rx) = mpsc::unbounded::<DbEvent>();
-
-                let mut conn = p.acquire().await.unwrap();
-                // Get raw sqlite3* handle
-                let handle: *mut sqlite3 =
-                    conn.lock_handle().await.unwrap().as_raw_handle().as_ptr();
-
-                // Put sender in a Box so it has a stable memory address
-                let tx_box = Box::new(tx);
-                let tx_ptr = Box::into_raw(tx_box) as *mut c_void;
-
-                unsafe {
-                    sqlite3_update_hook(handle, Some(update_hook_callback), tx_ptr);
-                }
-
                 rx.filter(|a| {
-                    ready(a.operation() == INSERT_OPERATION && a.table_name() == JOBS_TABLE)
+                    ready(a.operation() == &SqliteOperation::Insert && a.table_name() == JOBS_TABLE)
                 })
                 .ready_chunks(instances.try_lock().map(|r| r.len()).unwrap_or(10))
                 .then(|events| {
@@ -138,10 +148,14 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
         }
     }
 }
+
+/// Errors that can occur when creating a shared Sqlite storage backend
 #[derive(Debug, thiserror::Error)]
-pub enum SharedPostgresError {
+pub enum SharedSqliteError {
+    /// Namespace already exists in the registry
     #[error("Namespace {0} already exists")]
     NamespaceExists(String),
+    /// Could not acquire registry loc
     #[error("Could not acquire registry lock")]
     RegistryLocked,
 }
@@ -151,7 +165,7 @@ impl<Args, Decode: Codec<Args, Compact = CompactType>> MakeShared<Args>
 {
     type Backend = SqliteStorage<Args, Decode, SharedFetcher<CompactType>>;
     type Config = Config;
-    type MakeError = SharedPostgresError;
+    type MakeError = SharedSqliteError;
     fn make_shared(&mut self) -> Result<Self::Backend, Self::MakeError>
     where
         Self::Config: Default,
@@ -166,9 +180,9 @@ impl<Args, Decode: Codec<Args, Compact = CompactType>> MakeShared<Args>
         let mut r = self
             .registry
             .try_lock()
-            .ok_or(SharedPostgresError::RegistryLocked)?;
+            .ok_or(SharedSqliteError::RegistryLocked)?;
         if r.insert(config.queue().to_string(), tx).is_some() {
-            return Err(SharedPostgresError::NamespaceExists(
+            return Err(SharedSqliteError::NamespaceExists(
                 config.queue().to_string(),
             ));
         }
@@ -177,7 +191,7 @@ impl<Args, Decode: Codec<Args, Compact = CompactType>> MakeShared<Args>
             config,
             fetcher: SharedFetcher {
                 poller: self.drive.clone(),
-                receiver: rx,
+                receiver: Arc::new(std::sync::Mutex::new(rx)),
             },
             pool: self.pool.clone(),
             sink,
@@ -187,9 +201,10 @@ impl<Args, Decode: Codec<Args, Compact = CompactType>> MakeShared<Args>
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SharedFetcher<Compact> {
     poller: Shared<BoxFuture<'static, ()>>,
-    receiver: Receiver<SqliteTask<Compact>>,
+    receiver: Arc<std::sync::Mutex<Receiver<SqliteTask<Compact>>>>,
 }
 
 impl<Compact> Stream for SharedFetcher<Compact> {
@@ -201,7 +216,7 @@ impl<Compact> Stream for SharedFetcher<Compact> {
         let _ = this.poller.poll_unpin(cx);
 
         // Delegate actual items to receiver
-        this.receiver.poll_next_unpin(cx)
+        this.receiver.lock().unwrap().poll_next_unpin(cx)
     }
 }
 
@@ -221,13 +236,9 @@ where
 
     type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
 
-    type Codec = Decode;
-
-    type Compact = CompactType;
-
     type Context = SqlContext;
 
-    type Layer = Stack<LockTaskLayer, AcknowledgeLayer<SqliteAck>>;
+    type Layer = Stack<AcknowledgeLayer<SqliteAck>, LockTaskLayer>;
 
     fn heartbeat(&self, worker: &WorkerContext) -> Self::Beat {
         let keep_alive_interval = *self.config.keep_alive();
@@ -246,10 +257,45 @@ where
     fn middleware(&self) -> Self::Layer {
         let lock = LockTaskLayer::new(self.pool.clone());
         let ack = AcknowledgeLayer::new(SqliteAck::new(self.pool.clone()));
-        Stack::new(lock, ack)
+        Stack::new(ack, lock)
     }
 
     fn poll(self, worker: &WorkerContext) -> Self::Stream {
+        self.poll_shared(worker)
+            .map(|a| match a {
+                Ok(Some(task)) => Ok(Some(
+                    task.try_map(|t| Decode::decode(&t))
+                        .map_err(|e| sqlx::Error::Decode(e.into()))?,
+                )),
+                Ok(None) => Ok(None),
+                Err(e) => Err(e),
+            })
+            .boxed()
+    }
+}
+
+impl<Args, Decode: Send + 'static> BackendExt
+    for SqliteStorage<Args, Decode, SharedFetcher<CompactType>>
+where
+    Self: Backend<Args = Args, IdType = Ulid, Context = SqlContext, Error = sqlx::Error>,
+    Decode: Codec<Args, Compact = CompactType> + Send + 'static,
+    Decode::Error: std::error::Error + Send + Sync + 'static,
+    Args: Send + 'static + Unpin,
+{
+    type Codec = Decode;
+    type Compact = CompactType;
+    type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
+
+    fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
+        self.poll_shared(worker).boxed()
+    }
+}
+
+impl<Args, Decode: Send + 'static> SqliteStorage<Args, Decode, SharedFetcher<CompactType>> {
+    fn poll_shared(
+        self,
+        worker: &WorkerContext,
+    ) -> impl Stream<Item = Result<Option<SqliteTask<CompactType>>, sqlx::Error>> + 'static {
         let pool = self.pool.clone();
         let worker = worker.clone();
         // Initial registration heartbeat
@@ -258,7 +304,7 @@ where
         // before fetching any tasks
         // Subsequent heartbeats are handled in the heartbeat stream
         let init = initial_heartbeat(
-            pool.clone(),
+            pool,
             self.config.clone(),
             worker.clone(),
             "SharedSqliteStorage",
@@ -266,18 +312,9 @@ where
         let starter = stream::once(init)
             .map_ok(|_| None) // Noop after initial heartbeat
             .boxed();
-        let lazy_fetcher = self
-            .fetcher
-            .map(|t| {
-                t.try_map(|args| Decode::decode(&args).map_err(|e| sqlx::Error::Decode(e.into())))
-            })
-            .flat_map(|vec| match vec {
-                Ok(task) => stream::iter(vec![Ok(Some(task))]).boxed(),
-                Err(e) => stream::once(ready(Err(e))).boxed(),
-            })
-            .boxed();
+        let lazy_fetcher = self.fetcher.map(|s| Ok(Some(s))).boxed();
 
-        let eager_fetcher = StreamExt::boxed(SqlitePollFetcher::<Args, CompactType, Decode>::new(
+        let eager_fetcher = StreamExt::boxed(SqlitePollFetcher::<CompactType, Decode>::new(
             &self.pool,
             &self.config,
             &worker,
@@ -299,11 +336,8 @@ mod tests {
 
     #[tokio::test]
     async fn basic_worker() {
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
-
-        SqliteStorage::setup(&pool).await.unwrap();
-
-        let mut store = SharedSqliteStorage::new(pool);
+        let mut store = SharedSqliteStorage::new(":memory:");
+        SqliteStorage::setup(store.pool()).await.unwrap();
 
         let mut map_store = store.make_shared().unwrap();
 

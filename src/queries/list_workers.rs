@@ -1,4 +1,4 @@
-use apalis_core::backend::{Backend, ListWorkers, RunningWorker};
+use apalis_core::backend::{BackendExt, ListWorkers, RunningWorker};
 use futures::TryFutureExt;
 use ulid::Ulid;
 
@@ -15,14 +15,14 @@ struct Worker {
 
 impl<Args: Sync, D, F> ListWorkers for SqliteStorage<Args, D, F>
 where
-    SqliteStorage<Args, D, F>:
-        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self:
+        BackendExt<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
 {
     fn list_workers(
         &self,
         queue: &str,
     ) -> impl Future<Output = Result<Vec<RunningWorker>, Self::Error>> + Send {
-        let queue = queue.to_string();
+        let queue = queue.to_owned();
         let pool = self.pool.clone();
         let limit = 100;
         let offset = 0;

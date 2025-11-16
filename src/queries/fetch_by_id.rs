@@ -1,5 +1,5 @@
 use apalis_core::{
-    backend::{Backend, FetchById, codec::Codec},
+    backend::{BackendExt, FetchById, codec::Codec},
     task::task_id::TaskId,
 };
 use apalis_sql::from_row::{FromRowError, TaskRow};
@@ -9,8 +9,8 @@ use crate::{CompactType, SqlContext, SqliteStorage, SqliteTask, from_row::Sqlite
 
 impl<Args, D, F> FetchById<Args> for SqliteStorage<Args, D, F>
 where
-    SqliteStorage<Args, D, F>:
-        Backend<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self:
+        BackendExt<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
     D: Codec<Args, Compact = CompactType>,
     D::Error: std::error::Error + Send + Sync + 'static,
     Args: 'static,
