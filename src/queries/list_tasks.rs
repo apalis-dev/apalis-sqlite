@@ -2,7 +2,7 @@ use apalis_core::{
     backend::{BackendExt, Filter, ListAllTasks, ListTasks, codec::Codec},
     task::{Task, status::Status},
 };
-use apalis_sql::from_row::TaskRow;
+use apalis_sql::from_row::{FromRowError, TaskRow};
 use ulid::Ulid;
 
 use crate::{CompactType, SqlContext, SqliteStorage, SqliteTask, from_row::SqliteTaskRow};
@@ -42,11 +42,15 @@ where
             .await?
             .into_iter()
             .map(|r| {
-                let row: TaskRow = r.try_into()?;
-                row.try_into_task::<D, _, Ulid>()
-                    .map_err(|e| sqlx::Error::Protocol(e.to_string()))
+                let row: TaskRow = r
+                    .try_into()
+                    .map_err(|e: sqlx::Error| FromRowError::DecodeError(e.into()))?;
+                row.try_into_task_compact().and_then(|t| {
+                    t.try_map(|a| D::decode(&a).map_err(|e| FromRowError::DecodeError(e.into())))
+                })
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| sqlx::Error::Decode(e.into()))?;
             Ok(tasks)
         }
     }
