@@ -22,6 +22,7 @@ use futures::{
 };
 pub use sqlx::{
     Connection, Pool, Sqlite, SqliteConnection, SqlitePool,
+    error::Error as SqlxError,
     pool::{PoolConnection, PoolOptions},
     sqlite::{SqliteConnectOptions, SqliteOperation},
 };

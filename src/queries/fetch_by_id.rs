@@ -29,7 +29,11 @@ where
                     let row: TaskRow = r
                         .try_into()
                         .map_err(|e: sqlx::Error| FromRowError::DecodeError(e.into()))?;
-                    row.try_into_task::<D, _, Ulid>()
+                    row.try_into_task_compact().and_then(|t| {
+                        t.try_map(|a| {
+                            D::decode(&a).map_err(|e| FromRowError::DecodeError(e.into()))
+                        })
+                    })
                 })
                 .transpose()
                 .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;

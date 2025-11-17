@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
