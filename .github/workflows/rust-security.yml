@@ -28,29 +28,6 @@ jobs:
       - name: Run cargo deny
         run: cargo deny check
 
-  supply-chain:
-    name: Supply Chain Security
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@cargo-audit
-
-      - name: Audit dependencies
-        run: cargo audit
-
-      - name: Install cargo-outdated
-        uses: taiki-e/install-action@cargo-outdated
-
-      - name: Check for outdated dependencies
-        run: cargo outdated --exit-code 1
-        continue-on-error: true
-
   unused-deps:
     name: Unused Dependencies
     runs-on: ubuntu-latest
