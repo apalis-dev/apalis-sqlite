@@ -151,7 +151,7 @@ jobs:
         run: cargo tarpaulin --all-features --verbose --workspace --timeout 120 --out xml
 
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           file: cobertura.xml
           fail_ci_if_error: false
