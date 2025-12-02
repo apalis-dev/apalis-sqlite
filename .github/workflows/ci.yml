@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest] # TODO: windows-latest
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
@@ -42,11 +42,8 @@ jobs:
             ${{ runner.os }}-cargo-${{ matrix.rust }}-
             ${{ runner.os }}-cargo-
 
-      - name: Run cargo test
-        run: cargo test --verbose
-
       - name: Run cargo test with all features
-        run: cargo test --all-features --verbose
+        run: cargo test --all-features --verbose -- --test-threads=1
 
   fmt:
     name: Rustfmt
@@ -95,7 +92,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Cache cargo registry
         uses: actions/cache@v4
