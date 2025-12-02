@@ -55,29 +55,3 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v3
-
-  license-check:
-    name: License Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-license
-        uses: taiki-e/install-action@cargo-license
-
-      - name: Check licenses
-        run: |
-          echo "## License Report" > license-report.md
-          echo "" >> license-report.md
-          cargo license --json | jq -r '.[] | "- **\(.name)** (\(.version)): \(.license // "Unknown")"' >> license-report.md
-          cat license-report.md
-
-      - name: Upload license report
-        uses: actions/upload-artifact@v4
-        with:
-          name: license-report
-          path: license-report.md
