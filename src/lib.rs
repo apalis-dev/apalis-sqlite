@@ -498,7 +498,7 @@ mod tests {
             Ok(())
         }
 
-        let worker = WorkerBuilder::new("rango-tango-1")
+        let worker = WorkerBuilder::new("rango-tango-basic")
             .backend(backend)
             .build(send_reminder);
         worker.run().await.unwrap();
@@ -549,7 +549,7 @@ mod tests {
             Ok(())
         }
 
-        let worker = WorkerBuilder::new("rango-tango-1")
+        let worker = WorkerBuilder::new("rango-tango-hooked")
             .backend(backend)
             .build(send_reminder);
         worker.run().await.unwrap();
@@ -581,7 +581,7 @@ mod tests {
 
         sqlite.push_start(100usize).await.unwrap();
 
-        let worker = WorkerBuilder::new("rango-tango")
+        let worker = WorkerBuilder::new("rango-tango-workflow")
             .backend(sqlite)
             .on_event(|ctx, ev| {
                 println!("On Event = {:?}", ev);
