@@ -15,6 +15,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yaml
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
@@ -55,22 +57,10 @@ jobs:
             exit 1
           fi
 
-      - name: Run tests
-        run: cargo test --all-features
-
-      - name: Check format
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features
-
-      - name: Build docs
-        run: cargo doc --all-features --no-deps
-
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    needs: validate
+    needs: [test, validate]
     environment: release
     steps:
       - name: Checkout sources
@@ -93,6 +83,7 @@ jobs:
 
       - name: Publish to crates.io
         run: cargo publish
+<<<<<<< HEAD
 
   github-release:
     name: Create GitHub Release
@@ -130,3 +121,5 @@ jobs:
           prerelease: ${{ contains(needs.validate.outputs.version, 'alpha') || contains(needs.validate.outputs.version, 'beta') || contains(needs.validate.outputs.version, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+=======
+>>>>>>> 062a544 (chore: streamline the workflow steps)

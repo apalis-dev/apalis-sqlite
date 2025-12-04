@@ -33,10 +33,9 @@ body:
       label: Steps to reproduce
       description: Steps to reproduce the behavior
       placeholder: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '....'
-        4. See error
+        1. Setup with '....'
+        2. Do '....'
+        3. See error
     validations:
       required: true
 
@@ -51,9 +50,12 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of apalis-sqlite are you running?
+      description: What version are you running?
       options:
-        - 1.0.0-alpha.1
+        - 0.7.x
+        - 1.0.0-alpha.x
+        - 1.0.0-beta.x
+        - 1.0.0-rc.x
         - main branch
         - Other (specify in additional context)
     validations:

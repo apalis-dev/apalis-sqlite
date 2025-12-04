@@ -473,7 +473,9 @@ mod tests {
     #[tokio::test]
     async fn basic_worker() {
         const ITEMS: usize = 10;
-        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        let pool = SqlitePool::connect(std::env::var("DATABASE_URL").unwrap().as_str())
+            .await
+            .unwrap();
         SqliteStorage::setup(&pool).await.unwrap();
 
         let mut backend = SqliteStorage::new(&pool);
@@ -512,7 +514,10 @@ mod tests {
         let config = Config::new("rango-tango-queue")
             .with_poll_interval(lazy_strategy)
             .set_buffer_size(5);
-        let backend = SqliteStorage::new_with_callback(":memory:", &config);
+        let backend = SqliteStorage::new_with_callback(
+            std::env::var("DATABASE_URL").unwrap().as_str(),
+            &config,
+        );
         let pool = backend.pool().clone();
         SqliteStorage::setup(&pool).await.unwrap();
 
@@ -564,7 +569,7 @@ mod tests {
             });
 
         let mut sqlite = SqliteStorage::new_with_callback(
-            ":memory:",
+            std::env::var("DATABASE_URL").unwrap().as_str(),
             &Config::new("workflow-queue").with_poll_interval(
                 StrategyBuilder::new()
                     .apply(IntervalStrategy::new(Duration::from_millis(100)))

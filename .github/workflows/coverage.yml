@@ -1,0 +1,58 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  DATABASE_URL: test.db
+  SQLX_OFFLINE: true
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.16.2
+
+      - name: Install sqlx-cli
+        run: cargo binstall sqlx-cli --locked --force
+
+      - name: Set up database
+        run: sqlx database create
+
+      - name: Run migrations
+        run: sqlx migrate run
+
+      - name: Generate code coverage
+        run: cargo tarpaulin --all-features --verbose --workspace --timeout 120 --out xml -- --test-threads=1
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v5
+        with:
+          file: cobertura.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
