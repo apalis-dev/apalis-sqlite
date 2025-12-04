@@ -8,7 +8,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  DATABASE_URL: test.db
+  DATABASE_URL: sqlite://./test.db
   SQLX_OFFLINE: true
 
 jobs:
