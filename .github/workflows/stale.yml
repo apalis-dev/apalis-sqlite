@@ -2,7 +2,7 @@ name: Mark stale issues and pull requests
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Run daily at midnight
+    - cron: '0 3 * * *'  # Run daily at 3 AM UTC
   workflow_dispatch:
 
 jobs:

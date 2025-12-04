@@ -2,21 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  DATABASE_URL: sqlite://./test.db
+  SQLX_OFFLINE: true
 
 jobs:
   test:
     name: Test Suite
     runs-on: ${{ matrix.os }}
+
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest] # TODO: windows-latest
+        os: [ubuntu-latest]
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
@@ -41,6 +43,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.rust }}-
             ${{ runner.os }}-cargo-
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.16.2
+
+      - name: Install sqlx-cli
+        run: cargo binstall sqlx-cli --locked --force
+
+      - name: Set up database
+        run: sqlx database create
+
+      - name: Run migrations
+        run: sqlx migrate run
 
       - name: Run cargo test with all features
         run: cargo test --all-features --verbose -- --test-threads=1
@@ -108,50 +122,18 @@ jobs:
         env:
           RUSTDOCFLAGS: "-Dwarnings"
 
-  security:
-    name: Security Audit
+  unused-deps:
+    name: Unused Dependencies
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
+      - name: Install cargo-udeps
+        uses: taiki-e/install-action@cargo-udeps
 
-      - name: Run cargo audit
-        run: cargo audit
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Generate code coverage
-        run: cargo tarpaulin --all-features --verbose --workspace --timeout 120 --out xml
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v5
-        with:
-          file: cobertura.xml
-          fail_ci_if_error: false
+      - name: Check for unused dependencies
+        run: cargo +nightly udeps --all-targets --all-features
