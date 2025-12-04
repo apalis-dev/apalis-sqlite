@@ -15,7 +15,7 @@ jobs:
   test:
     name: Test Suite
     runs-on: ${{ matrix.os }}
-    
+
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -135,42 +135,5 @@ jobs:
       - name: Install cargo-udeps
         uses: taiki-e/install-action@cargo-udeps
 
-<<<<<<< HEAD
-      - name: Run cargo audit
-        run: cargo audit
-
-  coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v6
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Generate code coverage
-        run: cargo tarpaulin --all-features --verbose --workspace --timeout 120 --out xml
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v5
-        with:
-          file: cobertura.xml
-          fail_ci_if_error: false
-=======
       - name: Check for unused dependencies
         run: cargo +nightly udeps --all-targets --all-features
->>>>>>> 062a544 (chore: streamline the workflow steps)
