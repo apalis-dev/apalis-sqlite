@@ -45,7 +45,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.16.2
+        uses: cargo-bins/cargo-binstall@v1.16.3
 
       - name: Install sqlx-cli
         run: cargo binstall sqlx-cli --locked --force
