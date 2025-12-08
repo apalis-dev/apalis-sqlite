@@ -92,7 +92,7 @@ version = "0.22.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.base64ct]]
-version = "1.8.0"
+version = "1.8.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.bitflags]]
@@ -124,7 +124,7 @@ version = "1.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.2.48"
+version = "1.2.49"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
