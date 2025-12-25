@@ -9,7 +9,11 @@ use std::{
 };
 
 use crate::{
-    CompactType, Config, JOBS_TABLE, SqliteContext, SqliteStorage, SqliteTask, ack::{LockTaskLayer, SqliteAck}, callback::{DbEvent, update_hook_callback}, fetcher::SqlitePollFetcher, initial_heartbeat, keep_alive
+    CompactType, Config, JOBS_TABLE, SqliteContext, SqliteStorage, SqliteTask,
+    ack::{LockTaskLayer, SqliteAck},
+    callback::{DbEvent, update_hook_callback},
+    fetcher::SqlitePollFetcher,
+    initial_heartbeat, keep_alive,
 };
 use crate::{from_row::SqliteTaskRow, sink::SqliteSink};
 use apalis_codec::json::JsonCodec;

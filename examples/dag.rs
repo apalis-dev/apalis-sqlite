@@ -30,7 +30,7 @@ async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
     let mut backend = SqliteStorage::new(&pool);
-    backend.push_start(Value::from(vec![42, 43, 44])).await.unwrap();
+    backend.push_start(vec![42, 43, 44]).await.unwrap();
 
     let dag_flow = DagFlow::new("user-etl-workflow");
     let get_name = dag_flow.node(get_name);
@@ -41,7 +41,6 @@ async fn main() {
         .depends_on((&get_name, &get_age, &get_address)); // Order and types matters here
 
     dag_flow.validate().unwrap(); // Ensure DAG is valid
-
 
     let worker = WorkerBuilder::new("rango-tango")
         .backend(backend)

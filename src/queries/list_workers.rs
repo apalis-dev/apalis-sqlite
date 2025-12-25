@@ -15,8 +15,12 @@ struct Worker {
 
 impl<Args: Sync, D, F> ListWorkers for SqliteStorage<Args, D, F>
 where
-    Self:
-        BackendExt<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self: BackendExt<
+            Context = SqliteContext,
+            Compact = CompactType,
+            IdType = Ulid,
+            Error = sqlx::Error,
+        >,
 {
     fn list_workers(
         &self,

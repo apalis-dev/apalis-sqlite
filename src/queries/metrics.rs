@@ -16,8 +16,12 @@ struct StatisticRow {
 
 impl<Args, D, F> Metrics for SqliteStorage<Args, D, F>
 where
-    Self:
-        BackendExt<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self: BackendExt<
+            Context = SqliteContext,
+            Compact = CompactType,
+            IdType = Ulid,
+            Error = sqlx::Error,
+        >,
 {
     fn global(&self) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
         let pool = self.pool.clone();

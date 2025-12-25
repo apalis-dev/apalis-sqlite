@@ -23,8 +23,12 @@ impl From<QueueInfoRow> for QueueInfo {
 
 impl<Args, D, F> ListQueues for SqliteStorage<Args, D, F>
 where
-    Self:
-        BackendExt<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self: BackendExt<
+            Context = SqliteContext,
+            Compact = CompactType,
+            IdType = Ulid,
+            Error = sqlx::Error,
+        >,
 {
     fn list_queues(&self) -> impl Future<Output = Result<Vec<QueueInfo>, Self::Error>> + Send {
         let pool = self.pool.clone();

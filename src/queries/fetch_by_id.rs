@@ -9,8 +9,12 @@ use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::Sql
 
 impl<Args, D, F> FetchById<Args> for SqliteStorage<Args, D, F>
 where
-    Self:
-        BackendExt<Context = SqliteContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self: BackendExt<
+            Context = SqliteContext,
+            Compact = CompactType,
+            IdType = Ulid,
+            Error = sqlx::Error,
+        >,
     D: Codec<Args, Compact = CompactType>,
     D::Error: std::error::Error + Send + Sync + 'static,
     Args: 'static,
