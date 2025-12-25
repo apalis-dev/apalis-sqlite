@@ -5,7 +5,7 @@ use std::{fmt, marker::PhantomData};
 
 use apalis_codec::json::JsonCodec;
 use apalis_core::{
-    backend::{Backend, BackendExt, TaskStream, codec::Codec, queue::Queue},
+    backend::{Backend, BackendExt, TaskStream, codec::Codec},
     features_table,
     layers::Stack,
     task::Task,
@@ -47,14 +47,16 @@ pub mod queries;
 mod shared;
 /// Sink module for pushing tasks to sqlite backend
 pub mod sink;
+mod timestamp;
+
+pub use timestamp::SqliteDateTime;
 
 /// Type alias for sqlite context
-pub type SqliteContext = SqlContext<SqlitePool>;
+pub type SqliteContext = SqlContext;
 
 /// Type alias for a task stored in sqlite backend
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use apalis_sql::config::Config;
-pub use apalis_sql::ext::TaskBuilderExt;
 pub use callback::{DbEvent, HookCallbackListener};
 pub use shared::{SharedSqliteError, SharedSqliteStorage};
 
@@ -323,10 +325,6 @@ where
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
-    fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
-    }
-
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_default(worker).boxed()
     }
@@ -395,10 +393,6 @@ where
     type Codec = Decode;
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
-
-    fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
-    }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_with_listener(worker).boxed()
@@ -473,7 +467,6 @@ mod tests {
 
     use apalis::prelude::*;
     use apalis_workflow::*;
-    use chrono::Local;
     use serde::{Deserialize, Serialize};
     use sqlx::SqlitePool;
 
@@ -498,7 +491,7 @@ mod tests {
         .take(ITEMS);
         backend.push_stream(&mut items).await.unwrap();
 
-        println!("Starting worker at {}", Local::now());
+        println!("Starting worker");
 
         async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
             if ITEMS == item {

@@ -1,4 +1,4 @@
-use chrono::{TimeZone, Utc};
+use crate::SqliteDateTime;
 
 #[derive(Debug)]
 pub(crate) struct SqliteTaskRow {
@@ -17,10 +17,16 @@ pub(crate) struct SqliteTaskRow {
     pub(crate) metadata: Option<String>,
 }
 
-impl TryInto<apalis_sql::from_row::TaskRow> for SqliteTaskRow {
+/// Convert a UNIX timestamp to SqliteDateTime
+fn unix_to_datetime(ts: i64) -> Result<SqliteDateTime, sqlx::Error> {
+    SqliteDateTime::from_unix_timestamp(ts)
+        .ok_or_else(|| sqlx::Error::Protocol("Invalid timestamp".into()))
+}
+
+impl TryInto<apalis_sql::from_row::TaskRow<SqliteDateTime>> for SqliteTaskRow {
     type Error = sqlx::Error;
 
-    fn try_into(self) -> Result<apalis_sql::from_row::TaskRow, Self::Error> {
+    fn try_into(self) -> Result<apalis_sql::from_row::TaskRow<SqliteDateTime>, Self::Error> {
         Ok(apalis_sql::from_row::TaskRow {
             job: self.job,
             id: self
@@ -37,28 +43,13 @@ impl TryInto<apalis_sql::from_row::TaskRow> for SqliteTaskRow {
                 .ok_or_else(|| sqlx::Error::Protocol("Missing attempts".into()))?
                 as usize,
             max_attempts: self.max_attempts.map(|v| v as usize),
-            run_at: self.run_at.map(|ts| {
-                Utc.timestamp_opt(ts, 0)
-                    .single()
-                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
-                    .unwrap()
-            }),
+            run_at: self.run_at.map(unix_to_datetime).transpose()?,
             last_result: self
                 .last_result
                 .map(|res| serde_json::from_str(&res).unwrap_or(serde_json::Value::Null)),
-            lock_at: self.lock_at.map(|ts| {
-                Utc.timestamp_opt(ts, 0)
-                    .single()
-                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
-                    .unwrap()
-            }),
+            lock_at: self.lock_at.map(unix_to_datetime).transpose()?,
             lock_by: self.lock_by,
-            done_at: self.done_at.map(|ts| {
-                Utc.timestamp_opt(ts, 0)
-                    .single()
-                    .ok_or_else(|| sqlx::Error::Protocol("Invalid run_at timestamp".into()))
-                    .unwrap()
-            }),
+            done_at: self.done_at.map(unix_to_datetime).transpose()?,
             priority: self.priority.map(|v| v as usize),
             metadata: self
                 .metadata

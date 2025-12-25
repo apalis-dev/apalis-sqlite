@@ -12,6 +12,8 @@ use apalis_core::{
     worker::context::WorkerContext,
 };
 use apalis_sql::from_row::TaskRow;
+
+use crate::SqliteDateTime;
 use futures::{FutureExt, future::BoxFuture, stream::Stream};
 use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
@@ -41,7 +43,7 @@ where
     .await?
     .into_iter()
     .map(|r| {
-        let row: TaskRow = r.try_into()?;
+        let row: TaskRow<SqliteDateTime> = r.try_into()?;
         row.try_into_task_compact()
             .map_err(|e| sqlx::Error::Protocol(e.to_string()))
     })

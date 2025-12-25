@@ -5,7 +5,9 @@ use apalis_core::{
 use apalis_sql::from_row::{FromRowError, TaskRow};
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::SqliteTaskRow};
+use crate::{
+    CompactType, SqliteContext, SqliteDateTime, SqliteStorage, SqliteTask, from_row::SqliteTaskRow,
+};
 
 impl<Args, D, F> FetchById<Args> for SqliteStorage<Args, D, F>
 where
@@ -30,7 +32,7 @@ where
                 .fetch_optional(&pool)
                 .await?
                 .map(|r| {
-                    let row: TaskRow = r
+                    let row: TaskRow<SqliteDateTime> = r
                         .try_into()
                         .map_err(|e: sqlx::Error| FromRowError::DecodeError(e.into()))?;
                     row.try_into_task_compact().and_then(|t| {
