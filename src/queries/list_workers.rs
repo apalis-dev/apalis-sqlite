@@ -2,7 +2,7 @@ use apalis_core::backend::{BackendExt, ListWorkers, RunningWorker};
 use futures::TryFutureExt;
 use ulid::Ulid;
 
-use crate::{CompactType, SqlContext, SqliteStorage};
+use crate::{CompactType, SqliteContext, SqliteStorage};
 
 struct Worker {
     id: String,
@@ -15,8 +15,12 @@ struct Worker {
 
 impl<Args: Sync, D, F> ListWorkers for SqliteStorage<Args, D, F>
 where
-    Self:
-        BackendExt<Context = SqlContext, Compact = CompactType, IdType = Ulid, Error = sqlx::Error>,
+    Self: BackendExt<
+            Context = SqliteContext,
+            Compact = CompactType,
+            IdType = Ulid,
+            Error = sqlx::Error,
+        >,
 {
     fn list_workers(
         &self,

@@ -9,23 +9,20 @@ use std::{
 };
 
 use crate::{
-    CompactType, Config, JOBS_TABLE, SqliteStorage, SqliteTask,
+    CompactType, Config, JOBS_TABLE, SqliteContext, SqliteStorage, SqliteTask,
     ack::{LockTaskLayer, SqliteAck},
     callback::{DbEvent, update_hook_callback},
     fetcher::SqlitePollFetcher,
     initial_heartbeat, keep_alive,
 };
 use crate::{from_row::SqliteTaskRow, sink::SqliteSink};
+use apalis_codec::json::JsonCodec;
 use apalis_core::{
-    backend::{
-        Backend, BackendExt, TaskStream,
-        codec::{Codec, json::JsonCodec},
-        shared::MakeShared,
-    },
+    backend::{Backend, BackendExt, TaskStream, codec::Codec, queue::Queue, shared::MakeShared},
     layers::Stack,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-use apalis_sql::{context::SqlContext, from_row::TaskRow};
+use apalis_sql::from_row::TaskRow;
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
@@ -236,7 +233,7 @@ where
 
     type Beat = BoxStream<'static, Result<(), sqlx::Error>>;
 
-    type Context = SqlContext;
+    type Context = SqliteContext;
 
     type Layer = Stack<AcknowledgeLayer<SqliteAck>, LockTaskLayer>;
 
@@ -277,7 +274,7 @@ where
 impl<Args, Decode: Send + 'static> BackendExt
     for SqliteStorage<Args, Decode, SharedFetcher<CompactType>>
 where
-    Self: Backend<Args = Args, IdType = Ulid, Context = SqlContext, Error = sqlx::Error>,
+    Self: Backend<Args = Args, IdType = Ulid, Context = SqliteContext, Error = sqlx::Error>,
     Decode: Codec<Args, Compact = CompactType> + Send + 'static,
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
@@ -285,6 +282,10 @@ where
     type Codec = Decode;
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
+
+    fn get_queue(&self) -> Queue {
+        self.config.queue().to_owned()
+    }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_shared(worker).boxed()
