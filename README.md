@@ -40,7 +40,8 @@ async fn main() {
         start += 1;
         let task = Task::builder(start)
             .run_after(Duration::from_secs(1))
-            .with_ctx(SqlContext::new().with_priority(1))
+            .priority(1)
+            .max_attempts(5)
             .build();
         task
     })
@@ -90,12 +91,13 @@ async fn main() {
                 start += 1;
                 Task::builder(serde_json::to_vec(&start).unwrap())
                     .run_after(Duration::from_secs(1))
-                    .with_ctx(SqlContext::new().with_priority(start))
+                    .priority(start)
                     .build()
             })
             .take(20)
             .collect::<Vec<_>>()
             .await;
+            /// Push with just a `Pool`
             apalis_sqlite::sink::push_tasks(pool, config, items).await.unwrap();
         }
     });

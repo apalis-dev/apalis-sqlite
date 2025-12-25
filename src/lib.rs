@@ -54,6 +54,7 @@ pub type SqliteContext = SqlContext<SqlitePool>;
 /// Type alias for a task stored in sqlite backend
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use apalis_sql::config::Config;
+pub use apalis_sql::ext::TaskBuilderExt;
 pub use callback::{DbEvent, HookCallbackListener};
 pub use shared::{SharedSqliteError, SharedSqliteStorage};
 

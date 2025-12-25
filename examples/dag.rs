@@ -1,7 +1,6 @@
 use apalis::prelude::*;
 use apalis_sqlite::SqliteStorage;
 use apalis_workflow::*;
-use serde_json::Value;
 use sqlx::SqlitePool;
 
 async fn get_name(user_id: u32) -> Result<String, BoxDynError> {
