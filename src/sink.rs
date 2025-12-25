@@ -11,7 +11,7 @@ use futures::{
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteStorage, SqliteTask, config::Config};
+use crate::{CompactType, SqliteStorage, SqliteTask, Config};
 
 type FlushFuture = BoxFuture<'static, Result<(), Arc<sqlx::Error>>>;
 

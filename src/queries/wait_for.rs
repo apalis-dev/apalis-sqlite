@@ -22,7 +22,7 @@ where
     Self: BackendExt<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
     Result<O, String>: DeserializeOwned,
 {
-    type ResultStream = BoxStream<'static, Result<TaskResult<O>, Self::Error>>;
+    type ResultStream = BoxStream<'static, Result<TaskResult<O, Ulid>, Self::Error>>;
     fn wait_for(
         &self,
         task_ids: impl IntoIterator<Item = TaskId<Self::IdType>>,
@@ -78,7 +78,7 @@ where
     fn check_status(
         &self,
         task_ids: impl IntoIterator<Item = TaskId<Self::IdType>> + Send,
-    ) -> impl Future<Output = Result<Vec<TaskResult<O>>, Self::Error>> + Send {
+    ) -> impl Future<Output = Result<Vec<TaskResult<O, Ulid>>, Self::Error>> + Send {
         let pool = self.pool.clone();
         let ids: Vec<String> = task_ids.into_iter().map(|id| id.to_string()).collect();
 

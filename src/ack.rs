@@ -4,13 +4,12 @@ use apalis_core::{
     task::{Parts, status::Status},
     worker::{context::WorkerContext, ext::ack::Acknowledge},
 };
-use apalis_sql::context::SqlContext;
 use futures::{FutureExt, future::BoxFuture};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
-use crate::SqliteTask;
+use crate::{SqliteContext, SqliteTask};
 
 #[derive(Clone, Debug)]
 pub struct SqliteAck {
@@ -22,13 +21,13 @@ impl SqliteAck {
     }
 }
 
-impl<Res: Serialize + 'static> Acknowledge<Res, SqlContext, Ulid> for SqliteAck {
+impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteAck {
     type Error = sqlx::Error;
     type Future = BoxFuture<'static, Result<(), Self::Error>>;
     fn ack(
         &mut self,
         res: &Result<Res, BoxDynError>,
-        parts: &Parts<SqlContext, Ulid>,
+        parts: &Parts<SqliteContext, Ulid>,
     ) -> Self::Future {
         let task_id = parts.task_id;
         let worker_id = parts.ctx.lock_by().clone();
@@ -70,7 +69,7 @@ impl<Res: Serialize + 'static> Acknowledge<Res, SqlContext, Ulid> for SqliteAck 
 }
 
 pub(crate) fn calculate_status<Res>(
-    parts: &Parts<SqlContext, Ulid>,
+    parts: &Parts<SqliteContext, Ulid>,
     res: &Result<Res, BoxDynError>,
 ) -> Status {
     match &res {

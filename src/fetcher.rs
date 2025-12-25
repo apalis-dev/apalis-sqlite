@@ -11,20 +11,20 @@ use apalis_core::{
     task::Task,
     worker::context::WorkerContext,
 };
-use apalis_sql::{context::SqlContext, from_row::TaskRow};
+use apalis_sql::from_row::TaskRow;
 use futures::{FutureExt, future::BoxFuture, stream::Stream};
 use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
 use ulid::Ulid;
 
-use crate::{CompactType, SqliteTask, config::Config, from_row::SqliteTaskRow};
+use crate::{CompactType, Config, SqliteContext, SqliteTask, from_row::SqliteTaskRow};
 
 /// Fetch the next batch of tasks from the sqlite backend
 pub async fn fetch_next(
     pool: SqlitePool,
     config: Config,
     worker: WorkerContext,
-) -> Result<Vec<Task<CompactType, SqlContext, Ulid>>, sqlx::Error>
+) -> Result<Vec<Task<CompactType, SqliteContext, Ulid>>, sqlx::Error>
 where
 {
     let job_type = config.queue().to_string();
@@ -42,7 +42,7 @@ where
     .into_iter()
     .map(|r| {
         let row: TaskRow = r.try_into()?;
-        row.try_into_task_compact::<Ulid>()
+        row.try_into_task_compact()
             .map_err(|e| sqlx::Error::Protocol(e.to_string()))
     })
     .collect()

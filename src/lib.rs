@@ -3,17 +3,15 @@
 //! [`SqliteStorageWithHook`]: crate::SqliteStorage
 use std::{fmt, marker::PhantomData};
 
+use apalis_codec::json::JsonCodec;
 use apalis_core::{
-    backend::{
-        Backend, BackendExt, TaskStream,
-        codec::{Codec, json::JsonCodec},
-    },
+    backend::{Backend, BackendExt, TaskStream, codec::Codec, queue::Queue},
     features_table,
     layers::Stack,
     task::Task,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-pub use apalis_sql::context::SqlContext;
+use apalis_sql::context::SqlContext;
 use futures::{
     FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt,
     channel::mpsc::{self},
@@ -41,7 +39,6 @@ use crate::{
 
 mod ack;
 mod callback;
-mod config;
 /// Fetcher module for retrieving tasks from sqlite backend
 pub mod fetcher;
 mod from_row;
@@ -51,10 +48,13 @@ mod shared;
 /// Sink module for pushing tasks to sqlite backend
 pub mod sink;
 
+/// Type alias for sqlite context
+pub type SqliteContext = SqlContext<SqlitePool>;
+
 /// Type alias for a task stored in sqlite backend
-pub type SqliteTask<Args> = Task<Args, SqlContext, Ulid>;
+pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use callback::{DbEvent, HookCallbackListener};
-pub use config::Config;
+pub use apalis_sql::config::Config;
 pub use shared::{SharedSqliteError, SharedSqliteStorage};
 
 /// CompactType is the type used for compact serialization in sqlite backend
@@ -267,7 +267,7 @@ where
     type Args = Args;
     type IdType = Ulid;
 
-    type Context = SqlContext;
+    type Context = SqliteContext;
 
     type Error = sqlx::Error;
 
@@ -313,7 +313,7 @@ where
 
 impl<Args, Decode: Send + 'static> BackendExt for SqliteStorage<Args, Decode, SqliteFetcher>
 where
-    Self: Backend<Args = Args, IdType = Ulid, Context = SqlContext, Error = sqlx::Error>,
+    Self: Backend<Args = Args, IdType = Ulid, Context = SqliteContext, Error = sqlx::Error>,
     Decode: Codec<Args, Compact = CompactType> + Send + 'static,
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
@@ -321,6 +321,10 @@ where
     type Codec = Decode;
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
+
+    fn get_queue(&self) -> Queue {
+        self.config.queue().to_owned()
+    }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_default(worker).boxed()
@@ -336,7 +340,7 @@ where
     type Args = Args;
     type IdType = Ulid;
 
-    type Context = SqlContext;
+    type Context = SqliteContext;
 
     type Error = sqlx::Error;
 
@@ -382,7 +386,7 @@ where
 
 impl<Args, Decode: Send + 'static> BackendExt for SqliteStorage<Args, Decode, HookCallbackListener>
 where
-    Self: Backend<Args = Args, IdType = Ulid, Context = SqlContext, Error = sqlx::Error>,
+    Self: Backend<Args = Args, IdType = Ulid, Context = SqliteContext, Error = sqlx::Error>,
     Decode: Codec<Args, Compact = CompactType> + Send + 'static,
     Decode::Error: std::error::Error + Send + Sync + 'static,
     Args: Send + 'static + Unpin,
@@ -390,6 +394,10 @@ where
     type Codec = Decode;
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
+
+    fn get_queue(&self) -> Queue {
+        self.config.queue().to_owned()
+    }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_with_listener(worker).boxed()
@@ -529,7 +537,7 @@ mod tests {
                 start += 1;
 
                 Task::builder(serde_json::to_vec(&start).unwrap())
-                    .with_ctx(SqlContext::new().with_priority(start))
+                    .with_ctx(SqliteContext::new().with_priority(start))
                     .build()
             })
             .take(ITEMS)

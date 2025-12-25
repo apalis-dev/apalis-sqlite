@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-beta.4"
+version = "1.0.0-rc.1"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -17,7 +17,7 @@ async-std-comp = ["async-std", "sqlx/runtime-async-std-rustls"]
 async-std-comp-native-tls = ["async-std", "sqlx/runtime-async-std-native-tls"]
 tokio-comp = ["tokio", "sqlx/runtime-tokio-rustls"]
 tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio-native-tls"]
-json = ["apalis-core/json", "sqlx/json"]
+json = ["apalis-codec/json", "sqlx/json"]
 
 [dependencies.sqlx]
 version = "0.8.6"
@@ -27,8 +27,9 @@ features = ["chrono", "sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-core = { version = "1.0.0-beta.2", features = ["sleep"] }
-apalis-sql = { version = "1.0.0-beta.2" }
+apalis-codec = { version = "0.1.0-rc.1", default-features = false }
+apalis-core = { version = "1.0.0-rc.1", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-rc.1" }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -40,8 +41,8 @@ ulid = { version = "1", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis = { version = "1.0.0-beta.2" }
-apalis-workflow = { version = "0.1.0-beta.2" }
+apalis = { version = "1.0.0-rc.1" }
+apalis-workflow = { version = "0.1.0-rc.1" }
 futures-util = "0.3.31"
 
 [package.metadata.docs.rs]
