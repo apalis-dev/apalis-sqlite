@@ -18,11 +18,11 @@ use crate::{
 use crate::{from_row::SqliteTaskRow, sink::SqliteSink};
 use apalis_codec::json::JsonCodec;
 use apalis_core::{
-    backend::{Backend, BackendExt, TaskStream, codec::Codec, queue::Queue, shared::MakeShared},
+    backend::{Backend, BackendExt, TaskStream, codec::Codec, shared::MakeShared},
     layers::Stack,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-use apalis_sql::from_row::TaskRow;
+use apalis_sql::TaskRow;
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
@@ -282,10 +282,6 @@ where
     type Codec = Decode;
     type Compact = CompactType;
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
-
-    fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
-    }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
         self.poll_shared(worker).boxed()
