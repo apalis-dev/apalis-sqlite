@@ -39,17 +39,17 @@ impl TryInto<TaskRow> for SqliteTaskRow {
             max_attempts: self.max_attempts.map(|v| v as usize),
             run_at: self
                 .run_at
-                .map(|ts| <SqlDateTime as SqlDateTimeExt>::from_unix_timestamp(ts)),
+                .map(<SqlDateTime as SqlDateTimeExt>::from_unix_timestamp),
             last_result: self
                 .last_result
                 .map(|res| serde_json::from_str(&res).unwrap_or(serde_json::Value::Null)),
             lock_at: self
                 .lock_at
-                .map(|ts| <SqlDateTime as SqlDateTimeExt>::from_unix_timestamp(ts)),
+                .map(<SqlDateTime as SqlDateTimeExt>::from_unix_timestamp),
             lock_by: self.lock_by,
             done_at: self
                 .done_at
-                .map(|ts| <SqlDateTime as SqlDateTimeExt>::from_unix_timestamp(ts)),
+                .map(<SqlDateTime as SqlDateTimeExt>::from_unix_timestamp),
             priority: self.priority.map(|v| v as usize),
             metadata: self
                 .metadata
