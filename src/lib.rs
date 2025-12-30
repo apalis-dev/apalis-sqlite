@@ -49,12 +49,11 @@ mod shared;
 pub mod sink;
 
 /// Type alias for sqlite context
-pub type SqliteContext = SqlContext<SqlitePool>;
+pub type SqliteContext = SqlContext<()>;
 
 /// Type alias for a task stored in sqlite backend
 pub type SqliteTask<Args> = Task<Args, SqliteContext, Ulid>;
 pub use apalis_sql::config::Config;
-pub use apalis_sql::ext::TaskBuilderExt;
 pub use callback::{DbEvent, HookCallbackListener};
 pub use shared::{SharedSqliteError, SharedSqliteStorage};
 
@@ -324,7 +323,7 @@ where
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
     fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
+        Queue::from(self.config.queue().to_string())
     }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
@@ -397,7 +396,7 @@ where
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
     fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
+        Queue::from(self.config.queue().to_string())
     }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {

@@ -2,7 +2,7 @@ use apalis_core::{
     backend::{BackendExt, Filter, ListAllTasks, ListTasks, codec::Codec},
     task::{Task, status::Status},
 };
-use apalis_sql::from_row::{FromRowError, TaskRow};
+use apalis_sql::{TaskRow, from_row::FromRowError};
 use ulid::Ulid;
 
 use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::SqliteTaskRow};
