@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- feat: use DateTime abstraction from apalis-sql
+- bump: update apalis deps to rc.2
 - bump: to v1.0.0-rc.1 (#28)
 
 ## [1.0.0-beta.4] - 2025-12-08

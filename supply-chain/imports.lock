@@ -8,3 +8,7 @@ audited_as = "1.0.0-beta.3"
 [[unpublished.apalis-sqlite]]
 version = "1.0.0-rc.1"
 audited_as = "1.0.0-beta.4"
+
+[[unpublished.apalis-sqlite]]
+version = "1.0.0-rc.2"
+audited_as = "1.0.0-rc.1"
