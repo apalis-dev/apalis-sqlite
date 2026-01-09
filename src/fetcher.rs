@@ -11,7 +11,7 @@ use apalis_core::{
     task::Task,
     worker::context::WorkerContext,
 };
-use apalis_sql::from_row::TaskRow;
+use apalis_sql::TaskRow;
 use futures::{FutureExt, future::BoxFuture, stream::Stream};
 use pin_project::pin_project;
 use sqlx::{Pool, Sqlite, SqlitePool};
