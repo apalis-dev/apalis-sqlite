@@ -44,6 +44,7 @@ ulid = { version = "1", features = ["serde"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 apalis = { version = "1.0.0-rc.2" }
 apalis-workflow = { version = "0.1.0-rc.2" }
+apalis-codec = { version = "0.1.0-rc.2", features = ["msgpack"]}
 futures-util = "0.3.31"
 chrono = "0.4"
 
