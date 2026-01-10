@@ -1,4 +1,5 @@
 use apalis::prelude::*;
+use apalis_codec::msgpack::MsgPackCodec;
 use apalis_sqlite::SqliteStorage;
 use apalis_workflow::*;
 use sqlx::SqlitePool;
@@ -28,7 +29,7 @@ async fn collector(
 async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
-    let mut backend = SqliteStorage::new(&pool);
+    let mut backend = SqliteStorage::new(&pool).with_codec::<MsgPackCodec>();
     backend.push_start(vec![42, 43, 44]).await.unwrap();
 
     let dag_flow = DagFlow::new("user-etl-workflow");
