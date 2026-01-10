@@ -324,7 +324,7 @@ where
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
     fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
+        self.config.queue().clone()
     }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {
@@ -397,7 +397,7 @@ where
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
     fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
+        self.config.queue().clone()
     }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {

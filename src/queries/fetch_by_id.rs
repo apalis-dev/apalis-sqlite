@@ -2,7 +2,7 @@ use apalis_core::{
     backend::{BackendExt, FetchById, codec::Codec},
     task::task_id::TaskId,
 };
-use apalis_sql::from_row::{FromRowError, TaskRow};
+use apalis_sql::{TaskRow, from_row::FromRowError};
 use ulid::Ulid;
 
 use crate::{CompactType, SqliteContext, SqliteStorage, SqliteTask, from_row::SqliteTaskRow};

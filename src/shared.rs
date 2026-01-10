@@ -22,7 +22,7 @@ use apalis_core::{
     layers::Stack,
     worker::{context::WorkerContext, ext::ack::AcknowledgeLayer},
 };
-use apalis_sql::from_row::TaskRow;
+use apalis_sql::TaskRow;
 use futures::{
     FutureExt, SinkExt, Stream, StreamExt, TryStreamExt,
     channel::mpsc::{self, Receiver, Sender},
@@ -284,7 +284,7 @@ where
     type CompactStream = TaskStream<SqliteTask<Self::Compact>, sqlx::Error>;
 
     fn get_queue(&self) -> Queue {
-        self.config.queue().to_owned()
+        self.config.queue().clone()
     }
 
     fn poll_compact(self, worker: &WorkerContext) -> Self::CompactStream {

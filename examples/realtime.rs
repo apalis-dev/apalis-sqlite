@@ -7,7 +7,7 @@ async fn main() {
     let mut backend = SqliteStorage::new_with_callback(":memory:", &config);
 
     let pool = backend.pool();
-    SqliteStorage::setup(&pool).await.unwrap();
+    SqliteStorage::setup(pool).await.unwrap();
 
     backend.push(42).await.unwrap();
 
