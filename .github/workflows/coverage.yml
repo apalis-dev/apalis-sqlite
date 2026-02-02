@@ -36,7 +36,7 @@ jobs:
           key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.16.6
+        uses: cargo-bins/cargo-binstall@v1.17.4
 
       - name: Install sqlx-cli
         run: cargo binstall sqlx-cli --locked --force
