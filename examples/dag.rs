@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use apalis::prelude::*;
 use apalis_codec::msgpack::MsgPackCodec;
 use apalis_sqlite::SqliteStorage;
@@ -9,10 +11,12 @@ async fn get_name(user_id: u32) -> Result<String, BoxDynError> {
 }
 
 async fn get_age(user_id: u32) -> Result<usize, BoxDynError> {
+    tokio::time::sleep(Duration::from_millis(800)).await;
     Ok(user_id as usize + 20)
 }
 
 async fn get_address(user_id: u32) -> Result<usize, BoxDynError> {
+    tokio::time::sleep(Duration::from_millis(500)).await;
     Ok(user_id as usize + 100)
 }
 
@@ -30,7 +34,7 @@ async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
     let mut backend = SqliteStorage::new(&pool).with_codec::<MsgPackCodec>();
-    backend.push_start(vec![42, 43, 44]).await.unwrap();
+    backend.start_fan_out(vec![42, 43, 44]).await.unwrap();
 
     let dag_flow = DagFlow::new("user-etl-workflow");
     let get_name = dag_flow.node(get_name);
