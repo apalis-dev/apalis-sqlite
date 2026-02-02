@@ -44,7 +44,7 @@ pub mod fetcher;
 mod from_row;
 /// Queries module for sqlite backend
 pub mod queries;
-mod shared;
+pub mod shared;
 /// Sink module for pushing tasks to sqlite backend
 pub mod sink;
 
