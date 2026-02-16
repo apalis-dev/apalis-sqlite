@@ -30,7 +30,7 @@ features = ["sqlite"]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 apalis-codec = { version = "0.1.0-rc.3", default-features = false }
-apalis-core = { version = "1.0.0-rc.3", features = ["sleep"] }
+apalis-core = { version = "1.0.0-rc.4", features = ["sleep"] }
 apalis-sql = { version = "1.0.0-rc.3", default-features = false }
 log = "0.4.21"
 futures = "0.3.30"
