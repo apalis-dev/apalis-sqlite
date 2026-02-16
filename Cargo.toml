@@ -45,7 +45,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 apalis = { version = "1.0.0-rc.3" }
 apalis-workflow = { version = "0.1.0-rc.3" }
 apalis-codec = { version = "0.1.0-rc.3", features = ["msgpack"]}
-futures-util = "0.3.31"
+futures-util = "0.3.32"
 chrono = "0.4"
 
 [package.metadata.docs.rs]
