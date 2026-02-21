@@ -85,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "apalis-sqlite"
-version = "1.0.0-rc.3"
+version = "1.0.0-rc.4"
 dependencies = [
  "apalis",
  "apalis-codec",
