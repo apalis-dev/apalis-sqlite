@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-rc.3"
+version = "1.0.0-rc.4"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -29,9 +29,9 @@ features = ["sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-codec = { version = "0.1.0-rc.3", default-features = false }
-apalis-core = { version = "1.0.0-rc.3", features = ["sleep"] }
-apalis-sql = { version = "1.0.0-rc.3", default-features = false }
+apalis-codec = { version = "0.1.0-rc.4", default-features = false }
+apalis-core = { version = "1.0.0-rc.4", features = ["sleep"] }
+apalis-sql = { version = "1.0.0-rc.4", default-features = false }
 log = "0.4.21"
 futures = "0.3.30"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
@@ -42,9 +42,9 @@ ulid = { version = "1", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis = { version = "1.0.0-rc.3" }
-apalis-workflow = { version = "0.1.0-rc.3" }
-apalis-codec = { version = "0.1.0-rc.3", features = ["msgpack"]}
+apalis = { version = "1.0.0-rc.4" }
+apalis-workflow = { version = "0.1.0-rc.4" }
+apalis-codec = { version = "0.1.0-rc.4", features = ["msgpack"]}
 futures-util = "0.3.31"
 chrono = "0.4"
 
