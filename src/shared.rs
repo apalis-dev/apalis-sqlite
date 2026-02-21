@@ -56,11 +56,24 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
     pub fn new(url: &str) -> Self {
         Self::new_with_codec(url)
     }
+
     /// Create a new shared Sqlite storage backend with the given database URL and codec
     #[must_use]
     pub fn new_with_codec<Codec>(url: &str) -> SharedSqliteStorage<Codec> {
+        Self::new_with_pool_options(
+            url,
+            PoolOptions::new().max_lifetime(None).idle_timeout(None),
+        )
+    }
+
+    /// Create a new shared Sqlite storage backend with the given database URL and pool options
+    #[must_use]
+    pub fn new_with_pool_options<Codec>(
+        url: &str,
+        options: PoolOptions<Sqlite>,
+    ) -> SharedSqliteStorage<Codec> {
         let (tx, rx) = mpsc::unbounded::<DbEvent>();
-        let pool = PoolOptions::<Sqlite>::new()
+        let pool = options
             .after_connect(move |conn, _meta| {
                 let mut tx = tx.clone();
                 Box::pin(async move {
