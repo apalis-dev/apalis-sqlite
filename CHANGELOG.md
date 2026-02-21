@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- add(shared): new_with_pool_otions for a customizable pool creation (#50)
+
 ## [1.0.0-rc.3] - 2026-02-02
 
 - bump: to v1.0.0-rc.2 (#43)
