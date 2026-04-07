@@ -1,7 +1,7 @@
 use apalis_core::{
-    error::{AbortError, BoxDynError},
+    error::BoxDynError,
     layers::{Layer, Service},
-    task::{Parts, status::Status},
+    task::Parts,
     worker::{context::WorkerContext, ext::ack::Acknowledge},
 };
 use futures::{FutureExt, future::BoxFuture};
@@ -9,7 +9,13 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use ulid::Ulid;
 
-use crate::{SqliteContext, SqliteTask};
+use crate::{
+    SqliteContext, SqliteTask,
+    queries::{
+        ack_task::{ack_task, calculate_status},
+        lock_task::lock_task,
+    },
+};
 
 #[derive(Clone, Debug)]
 pub struct SqliteAck {
@@ -40,7 +46,6 @@ impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteA
         let attempt = parts.attempt.current() as i32;
         let pool = self.pool.clone();
         let res = response.map_err(|e| sqlx::Error::Decode(e.into()));
-        let status = status.to_string();
         async move {
             let task_id = task_id
                 .ok_or(sqlx::Error::ColumnNotFound("TASK_ID_FOR_ACK".to_owned()))?
@@ -48,54 +53,11 @@ impl<Res: Serialize + 'static> Acknowledge<Res, SqliteContext, Ulid> for SqliteA
             let worker_id =
                 worker_id.ok_or(sqlx::Error::ColumnNotFound("WORKER_ID_LOCK_BY".to_owned()))?;
             let res_ok = res?;
-            let res = sqlx::query_file!(
-                "queries/task/ack.sql",
-                task_id,
-                attempt,
-                res_ok,
-                status,
-                worker_id
-            )
-            .execute(&pool)
-            .await?;
-
-            if res.rows_affected() == 0 {
-                return Err(sqlx::Error::RowNotFound);
-            }
+            ack_task(&pool, &task_id, &worker_id, &res_ok, &status, attempt).await?;
             Ok(())
         }
         .boxed()
     }
-}
-
-pub(crate) fn calculate_status<Res>(
-    parts: &Parts<SqliteContext, Ulid>,
-    res: &Result<Res, BoxDynError>,
-) -> Status {
-    match &res {
-        Ok(_) => Status::Done,
-        Err(e) => match e {
-            _ if parts.ctx.max_attempts() as usize <= parts.attempt.current() => Status::Killed,
-            e if e.downcast_ref::<AbortError>().is_some() => Status::Killed,
-            _ => Status::Failed,
-        },
-    }
-}
-
-pub(crate) async fn lock_task(
-    pool: &SqlitePool,
-    task_id: &Ulid,
-    worker_id: &str,
-) -> Result<(), sqlx::Error> {
-    let task_id = task_id.to_string();
-    let res = sqlx::query_file!("queries/task/lock.sql", task_id, worker_id)
-        .execute(pool)
-        .await?;
-
-    if res.rows_affected() == 0 {
-        return Err(sqlx::Error::RowNotFound);
-    }
-    Ok(())
 }
 
 #[derive(Clone, Debug)]
@@ -165,8 +127,7 @@ where
         req.parts.ctx = req.parts.ctx.with_lock_by(Some(worker_id.clone()));
         let fut = self.inner.call(req);
         async move {
-            lock_task(&pool, &task_id, &worker_id).await?;
-
+            lock_task(&pool, &task_id.to_string(), &worker_id).await?;
             fut.await.map_err(|e| e.into())
         }
         .boxed()
