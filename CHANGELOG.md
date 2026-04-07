@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-04-07
+
+- bump: to v1.0.0-rc.7 (#68)
 - chore: expose ack api (#67)
 
 ## [1.0.0-rc.6] - 2026-03-12
