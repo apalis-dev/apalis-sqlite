@@ -6,8 +6,6 @@ use apalis_core::backend::StatType;
 /// ACK a task on success or failure
 pub mod ack_task;
 
-/// Lock a task for processing
-pub mod lock_task;
 /// Fetch tasks by their IDs
 pub mod fetch_by_id;
 /// Keep workers alive by updating their heartbeat
@@ -18,6 +16,8 @@ pub mod list_queues;
 pub mod list_tasks;
 /// List workers
 pub mod list_workers;
+/// Lock a task for processing
+pub mod lock_task;
 /// Metrics related queries
 pub mod metrics;
 /// Re-enqueue orphaned tasks that were being processed by dead workers
