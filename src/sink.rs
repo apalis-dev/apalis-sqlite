@@ -58,6 +58,7 @@ pub async fn push_tasks(
         let args = task.args;
         // Use specified queue if specified, otherwise use default
         let job_type = cfg.queue().to_string();
+        let idempotency_key = task.parts.idempotency_key;
         let meta = serde_json::to_string(&task.parts.ctx.meta()).unwrap_or_default();
         sqlx::query_file!(
             "queries/task/sink.sql",
@@ -67,7 +68,8 @@ pub async fn push_tasks(
             max_attempts,
             run_at,
             priority,
-            meta
+            meta,
+            idempotency_key
         )
         .execute(&mut *tx)
         .await?;

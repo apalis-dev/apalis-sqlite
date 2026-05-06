@@ -15,6 +15,7 @@ pub(crate) struct SqliteTaskRow {
     pub(crate) done_at: Option<i64>,
     pub(crate) priority: Option<i64>,
     pub(crate) metadata: Option<String>,
+    pub(crate) idempotency_key: Option<String>,
 }
 
 impl TryInto<TaskRow> for SqliteTaskRow {
@@ -54,6 +55,7 @@ impl TryInto<TaskRow> for SqliteTaskRow {
             metadata: self
                 .metadata
                 .map(|meta| serde_json::from_str(&meta).unwrap_or(serde_json::Value::Null)),
+            idempotency_key: self.idempotency_key,
         })
     }
 }

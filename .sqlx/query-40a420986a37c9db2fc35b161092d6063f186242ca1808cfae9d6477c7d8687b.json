@@ -67,6 +67,11 @@
         "name": "metadata",
         "ordinal": 12,
         "type_info": "Text"
+      },
+      {
+        "name": "idempotency_key",
+        "ordinal": 13,
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -85,6 +90,7 @@
       true,
       true,
       false,
+      true,
       true
     ]
   },

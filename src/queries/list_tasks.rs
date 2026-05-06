@@ -21,10 +21,9 @@ where
 {
     fn list_tasks(
         &self,
-        queue: &str,
         filter: &Filter,
     ) -> impl Future<Output = Result<Vec<SqliteTask<Args>>, Self::Error>> + Send {
-        let queue = queue.to_owned();
+        let queue = self.config().queue().to_string();
         let pool = self.pool.clone();
         let limit = filter.limit() as i32;
         let offset = filter.offset() as i32;

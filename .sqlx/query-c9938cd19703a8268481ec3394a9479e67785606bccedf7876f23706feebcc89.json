@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO\n    Jobs\nVALUES\n    (\n        ?1,\n        ?2,\n        ?3,\n        'Pending',\n        0,\n        ?4,\n        ?5,\n        NULL,\n        NULL,\n        NULL,\n        NULL,\n        ?6,\n        ?7,\n        ?8\n    ) ON CONFLICT(job_type, idempotency_key) DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "c9938cd19703a8268481ec3394a9479e67785606bccedf7876f23706feebcc89"
+}

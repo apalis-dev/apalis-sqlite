@@ -22,11 +22,8 @@ where
             Error = sqlx::Error,
         >,
 {
-    fn list_workers(
-        &self,
-        queue: &str,
-    ) -> impl Future<Output = Result<Vec<RunningWorker>, Self::Error>> + Send {
-        let queue = queue.to_owned();
+    fn list_workers(&self) -> impl Future<Output = Result<Vec<RunningWorker>, Self::Error>> + Send {
+        let queue = self.config().queue().to_string();
         let pool = self.pool.clone();
         let limit = 100;
         let offset = 0;

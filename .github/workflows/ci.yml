@@ -23,7 +23,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2026-04-16
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
@@ -108,6 +108,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-04-16
 
       - name: Cache cargo registry
         uses: actions/cache@v5
@@ -132,9 +134,11 @@ jobs:
 
       - name: Install Rust nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2026-04-16
 
       - name: Install cargo-udeps
         uses: taiki-e/install-action@cargo-udeps
 
       - name: Check for unused dependencies
-        run: cargo +nightly udeps --all-targets --all-features
+        run: cargo udeps --all-targets --all-features
