@@ -107,7 +107,6 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
                         )
                         .unwrap();
                         let row_ids = serde_json::to_string(&row_ids).unwrap();
-                        let mut tx = pool.begin().await?;
                         let buffer_size = max(10, instances.len()) as i32;
                         let res: Vec<_> = sqlx::query_file_as!(
                             SqliteTaskRow,
@@ -116,7 +115,7 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
                             row_ids,
                             buffer_size,
                         )
-                        .fetch(&mut *tx)
+                        .fetch(&mut *pool.acquire().await?)
                         .map(|r| {
                             let row: TaskRow = r?.try_into()?;
                             row.try_into_task_compact()
@@ -124,7 +123,6 @@ impl SharedSqliteStorage<JsonCodec<CompactType>> {
                         })
                         .try_collect()
                         .await?;
-                        tx.commit().await?;
                         Ok::<_, sqlx::Error>(res)
                     }
                 })
