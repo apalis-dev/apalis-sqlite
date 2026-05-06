@@ -40,12 +40,9 @@ where
             Ok(rec)
         }
     }
-    fn fetch_by_queue(
-        &self,
-        queue_id: &str,
-    ) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
+    fn fetch_by_queue(&self) -> impl Future<Output = Result<Vec<Statistic>, Self::Error>> + Send {
         let pool = self.pool.clone();
-        let queue_id = queue_id.to_owned();
+        let queue_id = self.config().queue().to_string();
         async move {
             let rec = sqlx::query_file_as!(
                 StatisticRow,

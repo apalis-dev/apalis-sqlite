@@ -14,5 +14,6 @@ VALUES
         NULL,
         NULL,
         ?6,
-        ?7
-    )
+        ?7,
+        ?8
+    ) ON CONFLICT(job_type, idempotency_key) DO NOTHING
