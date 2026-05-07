@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-rc.7"
+version = "1.0.0-rc.8"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -44,9 +44,8 @@ ulid = { version = "1", features = ["serde"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 apalis = { version = "1.0.0-rc.9" }
 apalis-workflow = { version = "0.1.0-rc.9" }
-apalis-codec = { version = "0.1.0-rc.9", features = ["msgpack"]}
+apalis-codec = { version = "0.1.0-rc.9", features = ["msgpack"] }
 futures-util = "0.3.31"
-chrono = "0.4"
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`

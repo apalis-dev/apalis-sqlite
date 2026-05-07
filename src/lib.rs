@@ -473,7 +473,6 @@ mod tests {
 
     use apalis::prelude::*;
     use apalis_workflow::*;
-    use chrono::Local;
     use serde::{Deserialize, Serialize};
     use sqlx::SqlitePool;
 
@@ -497,8 +496,6 @@ mod tests {
         })
         .take(ITEMS);
         backend.push_stream(&mut items).await.unwrap();
-
-        println!("Starting worker at {}", Local::now());
 
         async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
             if ITEMS == item {
