@@ -444,7 +444,7 @@ version = "1.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.js-sys]]
-version = "0.3.97"
+version = "0.3.98"
 criteria = "safe-to-deploy"
 
 [[exemptions.kv-log-macro]]
@@ -1008,23 +1008,23 @@ version = "0.1.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen]]
-version = "0.2.120"
+version = "0.2.121"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-futures]]
-version = "0.4.70"
+version = "0.4.71"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro]]
-version = "0.2.120"
+version = "0.2.121"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.120"
+version = "0.2.121"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen-shared]]
-version = "0.2.120"
+version = "0.2.121"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-encoder]]
