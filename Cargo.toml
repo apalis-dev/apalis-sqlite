@@ -13,16 +13,20 @@ categories = ["asynchronous", "database"]
 [features]
 default = ["tokio-comp", "migrate", "json", "chrono"]
 migrate = ["sqlx/migrate", "sqlx/macros"]
-async-std-comp = ["async-std", "sqlx/runtime-async-std-rustls"]
-async-std-comp-native-tls = ["async-std", "sqlx/runtime-async-std-native-tls"]
-tokio-comp = ["tokio", "sqlx/runtime-tokio-rustls"]
-tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio-native-tls"]
+async-std-comp = ["async-std", "sqlx/runtime-async-std", "sqlx/tls-rustls"]
+async-std-comp-native-tls = [
+  "async-std",
+  "sqlx/runtime-async-std",
+  "sqlx/tls-native-tls",
+]
+tokio-comp = ["tokio", "sqlx/runtime-tokio", "sqlx/tls-rustls"]
+tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio", "sqlx/tls-native-tls"]
 json = ["apalis-codec/json", "sqlx/json"]
 chrono = ["apalis-sql/chrono", "sqlx/chrono"]
 time = ["apalis-sql/time", "sqlx/time"]
 
 [dependencies.sqlx]
-version = "0.8.6"
+version = "0.9.0"
 default-features = false
 features = ["sqlite"]
 
