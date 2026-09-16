@@ -96,7 +96,6 @@ jobs:
           BRANCH="${{ github.event.pull_request.head.ref }}"
           REPO="${{ github.repository }}"
 
-          # Bail if nothing actually changed (e.g. entry already matched)
           if git diff --quiet CHANGELOG.md; then
             echo "No changes to commit."
             exit 0
@@ -127,4 +126,4 @@ jobs:
           gh api "repos/${REPO}/git/refs/heads/${BRANCH}" \
             -X PATCH \
             -f sha="$NEW_COMMIT" \
-            -f force=false
+            -F force=false
