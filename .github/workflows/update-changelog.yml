@@ -1,0 +1,129 @@
+name: Update Changelog
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Check if CHANGELOG already modified in this PR
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only)
+          if echo "$FILES" | grep -qx "CHANGELOG.md"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update CHANGELOG
+        if: steps.check.outputs.changed == 'false'
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          EVENT="${{ github.event.action }}"
+
+          FORMATTED_TITLE="$(echo "$PR_TITLE" | sed -E 's/^([a-zA-Z0-9_-]+):/*\1*:/')"
+          CHANGELOG_ENTRY="- ${FORMATTED_TITLE} ([#${PR_NUMBER}](https://github.com/${REPO}/pull/${PR_NUMBER}))"
+
+          # Pattern to match an existing entry for this PR number (anywhere in the file)
+          PR_PATTERN="(#${PR_NUMBER})"
+
+          if [ "$EVENT" = "opened" ]; then
+            # On open: only insert if no entry for this PR number already exists
+            if grep -qF "$PR_PATTERN" CHANGELOG.md; then
+              echo "Changelog entry for #${PR_NUMBER} already exists, skipping."
+            else
+              awk -v entry="$CHANGELOG_ENTRY" '
+                /^## \[Unreleased\]$/ {
+                  print
+                  print ""
+                  print entry
+                  skip_blank=1
+                  next
+                }
+                skip_blank && /^$/ { skip_blank=0; next }
+                { skip_blank=0; print }
+              ' CHANGELOG.md > CHANGELOG.md.tmp
+              mv CHANGELOG.md.tmp CHANGELOG.md
+            fi
+
+          elif [ "$EVENT" = "edited" ]; then
+            # On edit: replace the existing entry, or insert if it doesn't exist yet
+            if grep -qF "$PR_PATTERN" CHANGELOG.md; then
+              awk -v entry="$CHANGELOG_ENTRY" -v pattern="$PR_PATTERN" '
+                index($0, pattern) { print entry; next }
+                { print }
+              ' CHANGELOG.md > CHANGELOG.md.tmp
+              mv CHANGELOG.md.tmp CHANGELOG.md
+            else
+              echo "No existing entry for #${PR_NUMBER}, inserting under [Unreleased]."
+              awk -v entry="$CHANGELOG_ENTRY" '
+                /^## \[Unreleased\]$/ {
+                  print
+                  print ""
+                  print entry
+                  skip_blank=1
+                  next
+                }
+                skip_blank && /^$/ { skip_blank=0; next }
+                { skip_blank=0; print }
+              ' CHANGELOG.md > CHANGELOG.md.tmp
+              mv CHANGELOG.md.tmp CHANGELOG.md
+            fi
+          fi
+
+      - name: Commit via GitHub API
+        if: steps.check.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          REPO="${{ github.repository }}"
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          LATEST_SHA=$(gh api "repos/${REPO}/git/refs/heads/${BRANCH}" --jq .object.sha)
+          BASE_TREE=$(gh api "repos/${REPO}/git/commits/${LATEST_SHA}" --jq .tree.sha)
+
+          BLOB_SHA=$(gh api "repos/${REPO}/git/blobs" \
+            -f content="$(base64 -w0 CHANGELOG.md)" \
+            -f encoding="base64" \
+            --jq .sha)
+
+          NEW_TREE=$(gh api "repos/${REPO}/git/trees" \
+            -f base_tree="$BASE_TREE" \
+            -f "tree[][path]=CHANGELOG.md" \
+            -f "tree[][mode]=100644" \
+            -f "tree[][type]=blob" \
+            -f "tree[][sha]=$BLOB_SHA" \
+            --jq .sha)
+
+          NEW_COMMIT=$(gh api "repos/${REPO}/git/commits" \
+            -f message="docs: update CHANGELOG for PR #${{ github.event.pull_request.number }}" \
+            -f tree="$NEW_TREE" \
+            -f "parents[]=$LATEST_SHA" \
+            --jq .sha)
+
+          gh api "repos/${REPO}/git/refs/heads/${BRANCH}" \
+            -X PATCH \
+            -f sha="$NEW_COMMIT" \
+            -F force=false
