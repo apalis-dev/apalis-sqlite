@@ -21,4 +21,6 @@ WHERE
             )
             AND strftime('%s', 'now') - Workers.last_seen >= ?1
             AND Workers.worker_type = ?2
+            AND (?3 IS NULL OR Workers.id != ?3)  -- exclude this worker
+            AND (?4 IS NULL OR Workers.id = ?4)   -- only this worker
     );

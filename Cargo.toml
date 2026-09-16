@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-rc.8"
+version = "1.0.0-rc.9"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -11,19 +11,17 @@ keywords = ["apalis", "background-jobs", "task-queue", "sqlite", "async"]
 categories = ["asynchronous", "database"]
 
 [features]
-default = ["tokio-comp", "migrate", "json", "chrono"]
+default = ["tokio-comp", "migrate", "json"]
 migrate = ["sqlx/migrate", "sqlx/macros"]
 async-std-comp = ["async-std", "sqlx/runtime-async-std", "sqlx/tls-rustls"]
 async-std-comp-native-tls = [
-  "async-std",
-  "sqlx/runtime-async-std",
-  "sqlx/tls-native-tls",
+    "async-std",
+    "sqlx/runtime-async-std",
+    "sqlx/tls-native-tls",
 ]
 tokio-comp = ["tokio", "sqlx/runtime-tokio", "sqlx/tls-rustls"]
 tokio-comp-native-tls = ["tokio", "sqlx/runtime-tokio", "sqlx/tls-native-tls"]
 json = ["apalis-codec/json", "sqlx/json"]
-chrono = ["apalis-sql/chrono", "sqlx/chrono"]
-time = ["apalis-sql/time", "sqlx/time"]
 
 [dependencies.sqlx]
 version = "0.9.0"
@@ -33,37 +31,55 @@ features = ["sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-codec = { version = "0.1.0-rc.9", default-features = false }
-apalis-core = { version = "1.0.0-rc.9", features = ["sleep"] }
-apalis-sql = { version = "1.0.0-rc.9", default-features = false }
-log = "0.4.21"
-futures = "0.3.30"
+apalis-codec = { version = "0.1.0-rc.10", default-features = false }
+apalis-core = { version = "1.0.0-rc.10", features = ["sleep", "ulid"] }
+log = "0.4.34"
+futures = "0.3.34"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
-async-std = { version = "1.13.0", optional = true }
-thiserror = "2.0.0"
-pin-project = "1.1.10"
-ulid = { version = "1", features = ["serde"] }
+async-std = { version = "1.13.2", optional = true }
+thiserror = "2.0.20"
+pin-project = "1.1.13"
+ulid = { version = "3", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis = { version = "1.0.0-rc.9" }
-apalis-workflow = { version = "0.1.0-rc.9" }
-apalis-codec = { version = "0.1.0-rc.9", features = ["msgpack"] }
-futures-util = "0.3.31"
+apalis = { version = "1.0.0-rc.10", features = ["retry"] }
+apalis-workflow = { version = "0.1.0-rc.10" }
+apalis-codec = { version = "0.1.0-rc.10", features = ["msgpack", "bincode"] }
+futures-util = "0.3.34"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [package.metadata.docs.rs]
 # defines the configuration attribute `docsrs`
 rustdoc-args = ["--cfg", "docsrs"]
 all-features = true
 
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "forbid"
+
 rust_2018_idioms = { level = "warn", priority = -1 }
 missing_debug_implementations = "warn"
+missing_docs = "warn"
 unreachable_pub = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 type_complexity = "allow"
+
+await_holding_lock = "warn"
+dbg_macro = "warn"
+empty_enums = "warn"
+enum_glob_use = "warn"
+equatable_if_let = "warn"
+exit = "warn"
+filter_map_next = "warn"
+fn_params_excessive_bools = "warn"
+if_let_mutex = "warn"
+implicit_clone = "warn"
+imprecise_flops = "warn"
+inefficient_to_string = "warn"
+linkedlist = "warn"
+lossy_float_literal = "warn"
+macro_use_imports = "warn"
 manual_let_else = "warn"
 match_same_arms = "warn"
 match_wildcard_for_single_variants = "warn"
@@ -75,3 +91,16 @@ needless_pass_by_ref_mut = "warn"
 needless_pass_by_value = "warn"
 option_option = "warn"
 redundant_clone = "warn"
+ref_option = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+return_self_not_must_use = "warn"
+single_match_else = "warn"
+str_to_string = "warn"
+suboptimal_flops = "warn"
+todo = "warn"
+trivially_copy_pass_by_ref = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+unused_self = "warn"
+use_self = "warn"
+verbose_file_reads = "warn"

@@ -1,8 +1,7 @@
-use apalis_core::backend::{BackendExt, ListWorkers, RunningWorker};
+use apalis_core::backend::{Backend, ListWorkers, RunningWorker};
 use futures::TryFutureExt;
-use ulid::Ulid;
 
-use crate::{CompactType, SqliteContext, SqliteStorage};
+use crate::{SqliteStorage, error::Error};
 
 struct Worker {
     id: String,
@@ -13,18 +12,13 @@ struct Worker {
     started_at: Option<i64>,
 }
 
-impl<Args: Sync, D, F> ListWorkers for SqliteStorage<Args, D, F>
+impl<Args: Sync> ListWorkers for SqliteStorage<Args>
 where
-    Self: BackendExt<
-            Context = SqliteContext,
-            Compact = CompactType,
-            IdType = Ulid,
-            Error = sqlx::Error,
-        >,
+    Self: Backend<Error = Error>,
 {
     fn list_workers(&self) -> impl Future<Output = Result<Vec<RunningWorker>, Self::Error>> + Send {
-        let queue = self.config().queue().to_string();
-        let pool = self.pool.clone();
+        let queue = self.persistence.config.queue.to_string();
+        let pool = self.persistence.pool.clone();
         let limit = 100;
         let offset = 0;
         async move {
@@ -56,7 +50,7 @@ where
     fn list_all_workers(
         &self,
     ) -> impl Future<Output = Result<Vec<RunningWorker>, Self::Error>> + Send {
-        let pool = self.pool.clone();
+        let pool = self.persistence.pool.clone();
         let limit = 100;
         let offset = 0;
         async move {

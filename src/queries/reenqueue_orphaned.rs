@@ -1,54 +1,62 @@
-use std::time::Duration;
+use apalis_core::{backend::WorkerFilter, task::task_id::coalesce_ids};
+use sqlx::Executor;
 
-use futures::{FutureExt, Stream, stream};
-use sqlx::SqlitePool;
-
-use crate::Config;
-
-/// Re-enqueue tasks that were being processed by workers that have not sent a keep-alive signal within the specified duration
-pub fn reenqueue_orphaned(
-    pool: SqlitePool,
-    config: &Config,
-) -> impl Future<Output = Result<u64, sqlx::Error>> + Send {
-    let dead_for = config.reenqueue_orphaned_after().as_secs() as i64;
-    let queue = config.queue().to_string();
-    async move {
-        match sqlx::query_file!("queries/backend/reenqueue_orphaned.sql", dead_for, queue,)
-            .execute(&pool)
-            .await
-        {
-            Ok(res) => {
-                if res.rows_affected() > 0 {
-                    log::info!(
-                        "Re-enqueued {} orphaned tasks that were being processed by dead workers",
-                        res.rows_affected()
-                    );
-                }
-                Ok(res.rows_affected())
-            }
-            Err(e) => {
-                log::error!("Failed to re-enqueue orphaned tasks: {e}");
-                Err(e)
-            }
-        }
+/// Re-enqueue tasks that were being processed by dead workers
+///
+/// A worker that has not sent a keep-alive signal within the heartbeat duration is considered dead
+pub async fn reenqueue_orphaned<'a, E>(
+    executor: E,
+    dead_for: i64,
+    queue: &str,
+    filter: &WorkerFilter,
+) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'a, Database = sqlx::Sqlite>,
+{
+    let (exclude_id, only_id) = match filter {
+        WorkerFilter::AllExcept(id) => (Some(id), None),
+        WorkerFilter::Only(id) => (None, Some(id)),
+        WorkerFilter::None => (None, None),
+        _ => unreachable!(),
+    };
+    match sqlx::query_file!(
+        "queries/backend/reenqueue_orphaned.sql",
+        dead_for,
+        queue,
+        exclude_id,
+        only_id,
+    )
+    .execute(executor)
+    .await
+    {
+        Ok(res) => Ok(res.rows_affected()),
+        Err(e) => Err(e),
     }
 }
 
-/// Create a stream that periodically re-enqueues orphaned tasks
-pub fn reenqueue_orphaned_stream(
-    pool: SqlitePool,
-    config: Config,
-    interval: Duration,
-) -> impl Stream<Item = Result<u64, sqlx::Error>> + Send {
-    let config = config;
-    stream::unfold((), move |_| {
-        let pool = pool.clone();
-        let config = config.clone();
-        let interval = apalis_core::timer::Delay::new(interval);
-        let fut = async move {
-            interval.await;
-            reenqueue_orphaned(pool, &config).await
-        };
-        fut.map(|res| Some((res, ())))
-    })
+/// Re-enqueue tasks that were being processed by dying a worker
+///
+/// This will be invoked during `Backend::poll_close`
+pub async fn reenqueue_abandoned<'a, E>(
+    executor: E,
+    queue: &str,
+    worker: &str,
+    task_ids: &Vec<String>,
+) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'a, Database = sqlx::Sqlite>,
+{
+    let task_ids = coalesce_ids(task_ids);
+    match sqlx::query_file!(
+        "queries/backend/reenqueue_abandoned.sql",
+        queue,
+        worker,
+        task_ids
+    )
+    .execute(executor)
+    .await
+    {
+        Ok(res) => Ok(res.rows_affected()),
+        Err(e) => Err(e),
+    }
 }

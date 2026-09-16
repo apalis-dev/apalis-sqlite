@@ -1,17 +1,19 @@
-use sqlx::{Executor, Sqlite};
+use sqlx::Executor;
 
-/// Lock a task, given a worker
-pub async fn lock_task<E: for<'a> Executor<'a, Database = Sqlite>>(
-    pool: E,
-    task_id: &str,
+/// Lock multiple tasks, given a worker
+pub async fn lock_tasks<'a, E>(
+    executor: E,
+    task_ids: &[String],
     worker_id: &str,
-) -> Result<(), sqlx::Error> {
-    let res = sqlx::query_file!("queries/task/lock.sql", task_id, worker_id)
-        .execute(pool)
+) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'a, Database = sqlx::Sqlite>,
+{
+    let ids_json = serde_json::to_string(task_ids).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+    let res = sqlx::query_file!("queries/task/lock.sql", ids_json, worker_id)
+        .execute(executor)
         .await?;
 
-    if res.rows_affected() == 0 {
-        return Err(sqlx::Error::RowNotFound);
-    }
-    Ok(())
+    Ok(res.rows_affected())
 }

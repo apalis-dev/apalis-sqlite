@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH j AS (\n    SELECT\n        value ->> 'task_id' AS task_id,\n        value ->> 'attempt' AS attempt,\n        value ->> 'result' AS result,\n        value ->> 'status' AS status\n    FROM\n        json_each(?1)\n)\nUPDATE\n    Jobs\nSET\n    status = j.status,\n    attempts = j.attempt,\n    last_result = j.result,\n    done_at = strftime('%s', 'now')\nFROM\n    j\nWHERE\n    Jobs.id = j.task_id\n    AND Jobs.lock_by = ?2\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "372f1019c59dddf3cf6389f5a3bf77683c7bf0eb4711c57e3196820d18991cfa"
+}

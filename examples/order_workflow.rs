@@ -65,7 +65,6 @@ struct ShipmentService {
 
 impl ShipmentService {
     async fn dispatch(&self, order_id: i64, item_count: i64) -> Result<String, BoxDynError> {
-        // Submit shipment and return a tracking number.
         Ok(format!("dispatch {item_count} items for order {order_id}"))
     }
 }
@@ -82,7 +81,6 @@ impl EmailService {
         order_id: i64,
         tracking_number: &str,
     ) -> Result<(), BoxDynError> {
-        // Send a transactional email via your provider.
         println!("email {to} about order {order_id} with tracking {tracking_number}");
         Ok(())
     }
@@ -167,7 +165,7 @@ async fn refund_if_all_unavailable(
         .execute(&*db)
         .await?;
 
-    Ok(OrderJob { order_id: order_id })
+    Ok(OrderJob { order_id })
 }
 
 async fn dispatch_shipment(
@@ -206,6 +204,7 @@ async fn notify_customer(
     job: OrderJob,
     db: Data<SqlitePool>,
     email: Data<EmailService>,
+    worker: WorkerContext,
 ) -> Result<(), BoxDynError> {
     let order: OrderRecord = sqlx::query_as("SELECT * FROM orders WHERE id = ?")
         .bind(job.order_id)
@@ -226,6 +225,8 @@ async fn notify_customer(
         .bind(order.id)
         .execute(&*db)
         .await?;
+
+    worker.stop()?;
 
     Ok(())
 }
@@ -303,17 +304,14 @@ async fn main() {
     .await
     .unwrap();
 
-    let mut sqlite = SqliteStorage::new_in_queue(&pool, "order-fulfilment");
-    sqlite
-        .push_start(OrderJob { order_id: 1001 })
-        .await
-        .unwrap();
+    let mut sqlite = SqliteStorage::new(&pool).poll_with_interval(Duration::from_secs(1));
+    sqlite.push(OrderJob { order_id: 1001 }).await.unwrap();
 
-    let workflow = Workflow::new("order-fulfilment")
+    let workflow = SteppedFlow::new("order-fulfilment")
         .and_then(charge_payment)
         .filter_map(filter_unavailable)
         .and_then(refund_if_all_unavailable)
-        .delay_for(Duration::from_millis(500))
+        .delay_for(Duration::from_millis(5000))
         .and_then(dispatch_shipment)
         .and_then(notify_customer);
 

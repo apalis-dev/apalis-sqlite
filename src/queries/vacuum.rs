@@ -1,18 +1,15 @@
-use apalis_core::backend::{BackendExt, Vacuum};
-use ulid::Ulid;
+use apalis_core::backend::{Backend, Vacuum};
 
-use crate::{CompactType, SqliteStorage};
+use crate::{Error, SqliteStorage};
 
-impl<Args, F, Decode> Vacuum for SqliteStorage<Args, Decode, F>
+impl<Args> Vacuum for SqliteStorage<Args>
 where
-    Self: BackendExt<IdType = Ulid, Codec = Decode, Error = sqlx::Error, Compact = CompactType>,
-    F: Send,
-    Decode: Send,
+    Self: Backend<Error = Error>,
     Args: Send,
 {
     async fn vacuum(&mut self) -> Result<usize, Self::Error> {
         let res = sqlx::query_file!("queries/backend/vacuum.sql")
-            .execute(&self.pool)
+            .execute(&self.persistence.pool)
             .await?;
         Ok(res.rows_affected() as usize)
     }

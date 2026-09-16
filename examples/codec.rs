@@ -7,7 +7,7 @@ use sqlx::SqlitePool;
 async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
-    let mut backend = SqliteStorage::new(&pool).with_codec::<MsgPackCodec>();
+    let mut backend = SqliteStorage::new(&pool).with_codec(MsgPackCodec);
     backend.push(42).await.unwrap();
 
     async fn task(task: u32, worker: WorkerContext) -> Result<(), BoxDynError> {

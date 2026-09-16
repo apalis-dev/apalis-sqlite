@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE\n    Jobs\nSET\n    status = 'Running',\n    lock_at = strftime('%s', 'now'),\n    lock_by = ?2\nWHERE\n    id IN (\n        SELECT\n            value\n        FROM\n            json_each(?1)\n    )\n    AND (\n        status = 'Queued'\n        OR status = 'Pending'\n        OR (\n            status = 'Failed'\n            AND attempts < max_attempts\n        )\n    )\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "390dc1621e4fc1474d101b067e5df63b808a98a67431073781b67161487ab243"
+}

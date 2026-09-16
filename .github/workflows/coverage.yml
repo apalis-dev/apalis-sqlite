@@ -3,8 +3,19 @@ name: Coverage
 on:
   push:
     branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "**/*.rs"
+      - "queries/**/*.sql"
+      
   pull_request:
     branches: [main]
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - "**/*.rs"
+      - "queries/**/*.sql"
 
 env:
   CARGO_TERM_COLOR: always

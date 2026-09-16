@@ -23,7 +23,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: nightly-2026-04-16
+            rust: nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE\n    Jobs\nSET\n    status = \"Pending\",\n    done_at = NULL,\n    lock_by = NULL,\n    lock_at = NULL,\n    attempts = attempts + 1,\n    last_result = '{\"Err\": \"Re-enqueued due to worker shutdown\"}'\nWHERE\n    id IN (\n        SELECT\n            Jobs.id\n        FROM\n            Jobs\n            INNER JOIN Workers ON lock_by = Workers.id\n        WHERE\n            status = \"Queued\"\n            AND Workers.worker_type = ?1\n            AND Workers.id = ?2\n            AND Jobs.id IN (\n                SELECT\n                    value\n                FROM\n                    json_each(?3)\n            )\n    );\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e913ec096a6da5c915d86fdc0b6dc012ed036e4e0fadde45dfe544fc95d75466"
+}
