@@ -1,19 +1,22 @@
 use apalis_core::worker::context::WorkerContext;
-use sqlx::SqlitePool;
+use sqlx::Executor;
 
-use crate::Config;
+use crate::config::Config;
 
 /// Register a new worker in the database
-pub async fn register_worker(
-    pool: SqlitePool,
-    config: Config,
-    worker: WorkerContext,
+pub async fn register_worker<'a, E>(
+    executor: E,
+    config: &Config,
+    worker: &WorkerContext,
     storage_type: &str,
-) -> Result<(), sqlx::Error> {
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'a, Database = sqlx::Sqlite>,
+{
     let worker_id = worker.name().to_owned();
-    let queue = config.queue().to_string();
+    let queue = config.queue.to_string();
     let layers = worker.get_service().to_owned();
-    let keep_alive = config.keep_alive().as_secs() as i64;
+    let keep_alive = config.heartbeat_interval.as_secs() as i64;
     let res = sqlx::query_file!(
         "queries/backend/register_worker.sql",
         worker_id,
@@ -22,7 +25,7 @@ pub async fn register_worker(
         layers,
         keep_alive,
     )
-    .execute(&pool)
+    .execute(executor)
     .await?;
     if res.rows_affected() == 0 {
         return Err(sqlx::Error::Io(std::io::Error::new(

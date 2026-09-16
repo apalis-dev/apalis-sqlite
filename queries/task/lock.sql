@@ -5,7 +5,12 @@ SET
     lock_at = strftime('%s', 'now'),
     lock_by = ?2
 WHERE
-    id = ?1
+    id IN (
+        SELECT
+            value
+        FROM
+            json_each(?1)
+    )
     AND (
         status = 'Queued'
         OR status = 'Pending'

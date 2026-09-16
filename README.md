@@ -19,21 +19,9 @@
 - **Priority queues** — assign integer priorities so high-urgency jobs are always picked up first.
 - **Multiple polling strategies** — choose between standard polling and event-driven (hooked) storage to trade latency for CPU usage.
 - **Multi-step workflows** — chain async steps into pipelines with `apalis-workflow`; each stage only runs if the previous one succeeds.
-- **Shared storage** — multiplex multiple job types over a single SQLite connection.
+- **Shared storage** — multiple job types over a single SQLite connection.
 - **Custom codecs** — pluggable serialization/deserialization of job payloads as raw bytes.
 - **First-class `apalis` integration** — works seamlessly with workers, tower layers, and middleware.
-
----
-
-## Storage Types
-
-| Type                                                                                                            | Description                                                                  |
-| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`SqliteStorage`](https://docs.rs/apalis-sqlite/latest/apalis_sqlite/struct.SqliteStorage.html)                 | Standard polling-based storage.                                              |
-| [`SqliteStorageWithHook`](https://docs.rs/apalis-sqlite/latest/apalis_sqlite/struct.SqliteStorageWithHook.html) | Event-driven storage using SQLite update hooks for low-latency job fetching. |
-| [`SharedSqliteStorage`](https://docs.rs/apalis-sqlite/latest/apalis_sqlite/struct.SharedSqliteStorage.html)     | Shared storage supporting multiple job types over a single connection.       |
-
-> All types are built on top of `SqliteStorage` with different configurations applied under the hood.
 
 ---
 
@@ -59,7 +47,7 @@ async fn main() {
     let mut start = 0;
     let mut items = stream::repeat_with(move || {
         start += 1;
-        Task::builder(start)
+        TaskBuilder::new(start)
             .run_after(Duration::from_secs(1))
             .priority(1)
             .max_attempts(5)
@@ -92,26 +80,29 @@ use futures::stream::{self, StreamExt};
 
 #[tokio::main]
 async fn main() {
-    let lazy_strategy = StrategyBuilder::new()
-        .apply(IntervalStrategy::new(Duration::from_secs(5)))
-        .build();
-    let config = Config::new("queue")
-        .with_poll_interval(lazy_strategy)
-        .set_buffer_size(5);
-    let backend = SqliteStorage::new_with_callback(":memory:", &config);
+    let (pool, listener) = SqliteStorage::connect_with_callback(":memory:").unwrap();
 
-    let pool = backend.pool();
+    let config = Config::default()
+        .queue("queue")
+        .batch_size(5);
+
     SqliteStorage::setup(&pool).await.unwrap();
+
+    let strategy = Strategy::new()
+        .stream(listener.ready_chunks(config.batch_size))
+        .interval(Duration::from_millis(500));
+    
 
     tokio::spawn({
         let pool = pool.clone();
         let config = config.clone();
+        let queue = config.queue.to_string();
         async move {
             tokio::time::sleep(Duration::from_secs(2)).await;
             let mut start = 0;
             let items = stream::repeat_with(move || {
                 start += 1;
-                Task::builder(serde_json::to_vec(&start).unwrap())
+                TaskBuilder::new(serde_json::to_vec(&start).unwrap())
                     .run_after(Duration::from_secs(1))
                     .priority(start)
                     .build()
@@ -119,9 +110,14 @@ async fn main() {
             .take(20)
             .collect::<Vec<_>>()
             .await;
-            apalis_sqlite::sink::push_tasks(pool, config, items).await.unwrap();
+            let mut conn = pool.acquire().await.unwrap();
+            apalis_sqlite::queries::push_tasks(&mut conn, &queue, &items).await.unwrap();
         }
     });
+
+    let backend = SqliteStorage::new(&pool)
+        .with_config(config)
+        .poll_with_strategy(strategy);
 
     async fn send_reminder(item: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
         Ok(())
@@ -134,7 +130,7 @@ async fn main() {
 }
 ```
 
-### Sequential Workflow (Order Fulfilment Pipeline)
+### Sequential Workflow (Order Fulfillment Pipeline)
 
 Chain async steps to model a real-world order processing pipeline — validating payment,
 reserving inventory, dispatching a shipment notification, and emailing the customer.
@@ -192,7 +188,7 @@ async fn check_stock(item: StockedItem) -> Option<StockedItem> {
 
 #[tokio::main]
 async fn main() {
-    let workflow = Workflow::new("order-fulfilment")
+    let workflow = SteppedFlow::new("order-fulfillment")
         // Step 1: Charge payment and return a record of the charged order.
         .and_then(|order: Order| async move {
             println!(
@@ -272,7 +268,9 @@ async fn main() {
 
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
-    let mut sqlite = SqliteStorage::new_in_queue(&pool, "order-fulfilment");
+
+    let config = Config::default().queue("order-fulfillment");
+    let mut sqlite = SqliteStorage::new(&pool).with_config(config);
 
     sqlite
         .push_start(Order {
@@ -284,7 +282,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let worker = WorkerBuilder::new("fulfilment-worker")
+    let worker = WorkerBuilder::new("fulfillment-worker")
         .backend(sqlite)
         .on_event(|ctx, ev| {
             println!("Event: {:?}", ev);
@@ -338,15 +336,15 @@ async fn collector(
 async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
-    let mut backend = SqliteStorage::new(&pool).with_codec::<MsgPackCodec>();
+    let mut backend = SqliteStorage::new(&pool).with_codec(MsgPackCodec);
     backend.start_fan_out(vec![42, 43, 44]).await.unwrap();
 
-    let dag_flow = DagFlow::new("user-etl-workflow");
-    let get_name = dag_flow.node(get_name);
-    let get_age = dag_flow.node(get_age);
-    let get_address = dag_flow.node(get_address);
+    let dag_flow = GraphFlow::new("user-etl-workflow");
+    let get_name = dag_flow.add_task(get_name);
+    let get_age = dag_flow.add_task(get_age);
+    let get_address = dag_flow.add_task(get_address);
     dag_flow
-        .node(collector)
+        .add_task(collector)
         .depends_on((&get_name, &get_age, &get_address)); // Order and types matters here
 
     dag_flow.validate().unwrap(); // Ensure DAG is valid
@@ -369,16 +367,16 @@ Run multiple job types over a single SQLite connection:
 use std::{collections::HashMap, time::Duration};
 
 use apalis::prelude::*;
-use apalis_sqlite::{SharedSqliteStorage, SqliteStorage};
+use apalis_sqlite::{shared::SqliteStorageFactory, SqliteStorage};
 use futures::stream;
 
 #[tokio::main]
 async fn main() {
-    let mut store = SharedSqliteStorage::new(":memory:");
+    let mut store = SqliteStorageFactory::new(":memory:");
     SqliteStorage::setup(store.pool()).await.unwrap();
 
-    let mut map_store = store.make_shared().unwrap();
-    let mut int_store = store.make_shared().unwrap();
+    let mut map_store = store.create().unwrap();
+    let mut int_store = store.create().unwrap();
 
     map_store
         .push_stream(&mut stream::iter(vec![HashMap::<String, String>::new()]))
@@ -386,9 +384,9 @@ async fn main() {
         .unwrap();
     int_store.push(99).await.unwrap();
 
-    async fn send_reminder<T, I>(
+    async fn send_reminder<T>(
         _: T,
-        _task_id: TaskId<I>,
+        _task_id: TaskId,
         wrk: WorkerContext,
     ) -> Result<(), BoxDynError> {
         tokio::time::sleep(Duration::from_secs(2)).await;

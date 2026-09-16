@@ -1,50 +1,24 @@
-use apalis_core::{
-    error::{AbortError, BoxDynError},
-    task::{Parts, status::Status},
-};
+use apalis_core::backend::TaskResult;
+use sqlx::Executor;
 
-use sqlx::{Executor, Sqlite};
-use ulid::Ulid;
+/// Represents the result of a `SqliteTask` execution
+pub type AckPayload = TaskResult<serde_json::Value>;
 
-use crate::SqliteContext;
-
-/// Lock a task, given a worker
-pub async fn ack_task<E: for<'a> Executor<'a, Database = Sqlite>>(
-    pool: E,
-    task_id: &str,
+/// Ack multiple tasks, given a worker
+pub async fn ack_tasks<'a, E>(
+    executor: E,
+    messages: &[&AckPayload],
     worker_id: &str,
-    res: &str,
-    status: &Status,
-    attempt: i32,
-) -> Result<(), sqlx::Error> {
-    let status = status.to_string();
-    let res = sqlx::query_file!(
-        "queries/task/ack.sql",
-        task_id,
-        attempt,
-        res,
-        status,
-        worker_id
-    )
-    .execute(pool)
-    .await?;
+) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'a, Database = sqlx::Sqlite>,
+{
+    let payload_json =
+        serde_json::to_string(&messages).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
 
-    if res.rows_affected() == 0 {
-        return Err(sqlx::Error::RowNotFound);
-    }
-    Ok(())
-}
+    let result = sqlx::query_file!("queries/task/ack.sql", payload_json, worker_id)
+        .execute(executor)
+        .await?;
 
-pub fn calculate_status<Res>(
-    parts: &Parts<SqliteContext, Ulid>,
-    res: &Result<Res, BoxDynError>,
-) -> Status {
-    match &res {
-        Ok(_) => Status::Done,
-        Err(e) => match e {
-            _ if parts.ctx.max_attempts() as usize <= parts.attempt.current() => Status::Killed,
-            e if e.downcast_ref::<AbortError>().is_some() => Status::Killed,
-            _ => Status::Failed,
-        },
-    }
+    Ok(result.rows_affected())
 }

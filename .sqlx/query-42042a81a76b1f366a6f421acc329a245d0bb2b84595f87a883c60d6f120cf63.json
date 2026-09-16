@@ -6,22 +6,31 @@
       {
         "name": "name",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "job_type"
+          }
+        }
       },
       {
         "name": "stats",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "name": "workers",
         "ordinal": 2,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "name": "activity",
         "ordinal": 3,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       }
     ],
     "parameters": {
@@ -29,9 +38,9 @@
     },
     "nullable": [
       false,
-      false,
-      false,
-      false
+      null,
+      null,
+      null
     ]
   },
   "hash": "42042a81a76b1f366a6f421acc329a245d0bb2b84595f87a883c60d6f120cf63"

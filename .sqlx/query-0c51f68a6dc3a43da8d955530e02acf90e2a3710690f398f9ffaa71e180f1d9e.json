@@ -6,22 +6,26 @@
       {
         "name": "priority",
         "ordinal": 0,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": "Expression"
       },
       {
         "name": "type",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "name": "statistic",
         "ordinal": 2,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "name": "value",
         "ordinal": 3,
-        "type_info": "Float"
+        "type_info": "Float",
+        "origin": "Expression"
       }
     ],
     "parameters": {

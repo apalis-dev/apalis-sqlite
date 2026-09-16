@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n    id,\n    status,\n    last_result as result,\n    attempts as attempt\nFROM\n    Jobs\nWHERE\n    id IN (\n        SELECT\n            value\n        FROM\n            json_each(?)\n    )\n    AND (\n        status = 'Done'\n        OR (\n            status = 'Failed'\n            AND attempts >= max_attempts\n        )\n        OR status = 'Killed'\n    )\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "status",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "name": "result",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "last_result"
+          }
+        }
+      },
+      {
+        "name": "attempt",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "attempts"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "7f32c6cbf20be0cd6e20510d04b010eebb0551753ee259a623a98b886ef13d52"
+}

@@ -6,32 +6,68 @@
       {
         "name": "id",
         "ordinal": 0,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "id"
+          }
+        }
       },
       {
         "name": "worker_type",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "worker_type"
+          }
+        }
       },
       {
         "name": "storage_name",
         "ordinal": 2,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "storage_name"
+          }
+        }
       },
       {
         "name": "layers",
         "ordinal": 3,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "layers"
+          }
+        }
       },
       {
         "name": "last_seen",
         "ordinal": 4,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "last_seen"
+          }
+        }
       },
       {
         "name": "started_at",
         "ordinal": 5,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Workers",
+            "name": "started_at"
+          }
+        }
       }
     ],
     "parameters": {
