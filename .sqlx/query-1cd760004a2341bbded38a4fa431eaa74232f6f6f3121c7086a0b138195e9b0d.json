@@ -6,72 +6,156 @@
       {
         "name": "job",
         "ordinal": 0,
-        "type_info": "Blob"
+        "type_info": "Blob",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "job"
+          }
+        }
       },
       {
         "name": "id",
         "ordinal": 1,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "id"
+          }
+        }
       },
       {
         "name": "job_type",
         "ordinal": 2,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "job_type"
+          }
+        }
       },
       {
         "name": "status",
         "ordinal": 3,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "status"
+          }
+        }
       },
       {
         "name": "attempts",
         "ordinal": 4,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "attempts"
+          }
+        }
       },
       {
         "name": "max_attempts",
         "ordinal": 5,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "max_attempts"
+          }
+        }
       },
       {
         "name": "run_at",
         "ordinal": 6,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "run_at"
+          }
+        }
       },
       {
         "name": "last_result",
         "ordinal": 7,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "last_result"
+          }
+        }
       },
       {
         "name": "lock_at",
         "ordinal": 8,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "lock_at"
+          }
+        }
       },
       {
         "name": "lock_by",
         "ordinal": 9,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "lock_by"
+          }
+        }
       },
       {
         "name": "done_at",
         "ordinal": 10,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "done_at"
+          }
+        }
       },
       {
         "name": "priority",
         "ordinal": 11,
-        "type_info": "Integer"
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "priority"
+          }
+        }
       },
       {
         "name": "metadata",
         "ordinal": 12,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "metadata"
+          }
+        }
       },
       {
         "name": "idempotency_key",
         "ordinal": 13,
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "Jobs",
+            "name": "idempotency_key"
+          }
+        }
       }
     ],
     "parameters": {

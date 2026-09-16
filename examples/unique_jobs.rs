@@ -10,13 +10,9 @@ async fn main() {
     SqliteStorage::setup(&pool).await.unwrap();
     let mut backend = SqliteStorage::new(&pool);
 
-    let task_1 = TaskBuilder::new(42)
-        .with_idempotency_key(dedupe_key)
-        .build();
+    let task_1 = TaskBuilder::new(42).idempotency_key(dedupe_key).build();
 
-    let task_2 = TaskBuilder::new(43)
-        .with_idempotency_key(dedupe_key)
-        .build();
+    let task_2 = TaskBuilder::new(43).idempotency_key(dedupe_key).build();
 
     backend.push_task(task_1).await.unwrap();
     backend.push_task(task_2).await.unwrap();

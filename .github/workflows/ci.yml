@@ -23,7 +23,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: nightly-2026-04-16
+            rust: nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
@@ -46,7 +46,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.20.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       - name: Install sqlx-cli
         run: cargo binstall sqlx-cli --locked --force

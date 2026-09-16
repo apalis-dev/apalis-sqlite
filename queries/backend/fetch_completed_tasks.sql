@@ -1,7 +1,8 @@
 SELECT
     id,
     status,
-    last_result as result
+    last_result as result,
+    attempts as attempt
 FROM
     Jobs
 WHERE

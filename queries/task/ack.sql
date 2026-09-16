@@ -1,10 +1,21 @@
+WITH j AS (
+    SELECT
+        value ->> 'task_id' AS task_id,
+        value ->> 'attempt' AS attempt,
+        value ->> 'result' AS result,
+        value ->> 'status' AS status
+    FROM
+        json_each(?1)
+)
 UPDATE
     Jobs
 SET
-    status = ?4,
-    attempts = ?2,
-    last_result = ?3,
+    status = j.status,
+    attempts = j.attempt,
+    last_result = j.result,
     done_at = strftime('%s', 'now')
+FROM
+    j
 WHERE
-    id = ?1
-    AND lock_by = ?5
+    Jobs.id = j.task_id
+    AND Jobs.lock_by = ?2

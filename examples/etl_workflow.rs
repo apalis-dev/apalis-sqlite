@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use apalis::prelude::*;
 use apalis_codec::msgpack::MsgPackCodec;
-use apalis_sqlite::SqliteStorage;
+use apalis_sqlite::{Config, SqliteStorage};
 use apalis_workflow::*;
 use sqlx::SqlitePool;
 
@@ -33,24 +33,29 @@ async fn collector(
 async fn main() {
     let pool = SqlitePool::connect(":memory:").await.unwrap();
     SqliteStorage::setup(&pool).await.unwrap();
-    let mut backend = SqliteStorage::new(&pool).with_codec::<MsgPackCodec>();
+    let config = Config::default().queue("user-etl-workflow");
+    let mut backend = SqliteStorage::new(&pool)
+        .with_config(config)
+        .with_codec(MsgPackCodec)
+        .poll_with_interval(Duration::from_secs(1));
+
     backend.start_fan_out(vec![42, 43, 44]).await.unwrap();
 
-    let dag_flow = DagFlow::new("user-etl-workflow");
-    let get_name = dag_flow.node(get_name);
-    let get_age = dag_flow.node(get_age);
-    let get_address = dag_flow.node(get_address);
-    dag_flow
-        .node(collector)
+    let graph = GraphFlow::new("user-etl-workflow");
+    let get_name = graph.add_task(get_name);
+    let get_age = graph.add_task(get_age);
+    let get_address = graph.add_task(get_address);
+    graph
+        .add_task(collector)
         .depends_on((&get_name, &get_age, &get_address)); // Order and types matters here
 
-    dag_flow.validate().unwrap(); // Ensure DAG is valid
+    graph.validate().unwrap(); // Ensure DAG is valid
 
     let worker = WorkerBuilder::new("rango-tango")
         .backend(backend)
         .on_event(|_c, e| {
             println!("{e:?},");
         })
-        .build(dag_flow);
+        .build(graph);
     worker.run().await.unwrap();
 }

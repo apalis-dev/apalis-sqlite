@@ -35,8 +35,11 @@ skip-tree = [
     { name = "getrandom" },
     { name = "hashbrown" },
     { name = "rand" },
-    { name = "rand_chacha" },
+    { name = "async-channel" },
     { name = "rand_core" },
+    { name = "event-listener" },
+    { name = "syn" },
+
 ]
 
 [sources]
