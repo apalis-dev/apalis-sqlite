@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- deps(deps): bump thiserror from 2.0.20 to 2.0.21 ([#111](https://github.com/apalis-dev/apalis-sqlite/pull/111))
 - *bump*: to v1.0.0-rc.9 ([#110](https://github.com/apalis-dev/apalis-sqlite/pull/110))
 ## [1.0.0-rc.7] - 2026-05-07
 
