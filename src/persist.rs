@@ -153,7 +153,7 @@ impl Persistence for SqlxPersistence {
     async fn push_tasks(&mut self, tasks: Vec<Task<Self::Compact>>) -> Result<(), Self::Error> {
         let queue = self.config.queue.as_ref();
         let mut tx = self.pool.begin().await?;
-        push_tasks(&mut tx, queue, &tasks).await?;
+        push_tasks(&mut *tx, queue, &tasks).await?;
         tx.commit().await?;
         Ok(())
     }
