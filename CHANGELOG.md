@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.10] - 2026-10-02
+
 - fix: compile alongside sqlx PostgreSQL driver when pushing tasks (#112)
 
-## [1.0.0-rc.7] - 2026-05-07
+## [1.0.0-rc.8] - 2026-05-07
 
 - bump: to v1.0.0-rc.8 (#78)
 - feat: idempotency for tasks (#77)
