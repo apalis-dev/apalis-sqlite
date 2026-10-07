@@ -1,6 +1,6 @@
 [package]
 name = "apalis-sqlite"
-version = "1.0.0-rc.10"
+version = "1.0.0-rc.11"
 authors = ["Njuguna Mureithi <mureithinjuguna@gmail.com>"]
 readme = "README.md"
 edition = "2024"
@@ -31,21 +31,21 @@ features = ["sqlite"]
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-apalis-codec = { version = "0.1.0-rc.10", default-features = false }
-apalis-core = { version = "1.0.0-rc.10", features = ["sleep", "ulid"] }
+apalis-codec = { version = "0.1.0-rc.11", default-features = false }
+apalis-core = { version = "1.0.0-rc.11", features = ["sleep", "ulid"] }
 log = "0.4.34"
 futures = "0.3.34"
 tokio = { version = "1", features = ["rt", "net"], optional = true }
 async-std = { version = "1.13.2", optional = true }
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 pin-project = "1.1.13"
 ulid = { version = "3", features = ["serde"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-apalis = { version = "1.0.0-rc.10", features = ["retry"] }
-apalis-workflow = { version = "0.1.0-rc.10" }
-apalis-codec = { version = "0.1.0-rc.10", features = ["msgpack", "bincode"] }
+apalis = { version = "1.0.0-rc.11", features = ["retry", "task-context"] }
+apalis-workflow = { version = "0.1.0-rc.11" }
+apalis-codec = { version = "0.1.0-rc.11", features = ["msgpack", "bincode"] }
 futures-util = "0.3.34"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 

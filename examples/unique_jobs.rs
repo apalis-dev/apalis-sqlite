@@ -18,8 +18,8 @@ async fn main() {
     backend.push_task(task_2).await.unwrap();
 
     async fn task(task: u32, worker: WorkerContext) -> Result<(), BoxDynError> {
-        apalis_core::timer::sleep(std::time::Duration::from_secs(1)).await;
         assert_eq!(task, 42);
+        apalis_core::timer::sleep(std::time::Duration::from_secs(1)).await;
         worker.stop()?;
         Ok(())
     }
