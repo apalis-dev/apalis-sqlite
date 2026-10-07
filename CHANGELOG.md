@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.11] - 2026-10-07
+
+- bump: to v1.0.0-rc.11
+
 ## [1.0.0-rc.10] - 2026-10-02
 
 - fix: compile alongside sqlx PostgreSQL driver when pushing tasks (#112)

@@ -25,7 +25,7 @@ where
     O: Send + 'static + serde::de::DeserializeOwned,
 {
     type ResultStream = BoxStream<'static, Result<TaskResult<O>, Self::Error>>;
-    fn wait_for(&self, task_ids: impl IntoIterator<Item = TaskId>) -> Self::ResultStream {
+    fn wait_for(&mut self, task_ids: impl IntoIterator<Item = TaskId>) -> Self::ResultStream {
         let pool = self.persistence.pool.clone();
         let ids: HashSet<String> = task_ids.into_iter().map(|id| id.to_string()).collect();
 
@@ -74,7 +74,7 @@ where
 
     // Implementation of check_status
     fn check_status(
-        &self,
+        &mut self,
         task_ids: impl IntoIterator<Item = TaskId> + Send,
     ) -> impl Future<Output = Result<Vec<TaskResult<O>>, Self::Error>> + Send {
         let pool = self.persistence.pool.clone();
