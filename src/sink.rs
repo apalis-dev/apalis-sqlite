@@ -1,6 +1,7 @@
 use std::{
     pin::Pin,
     task::{Context, Poll},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use futures::Sink;
@@ -24,7 +25,12 @@ where
             .as_ref()
             .map(|id| id.to_string())
             .unwrap_or(Ulid::generate().to_string());
-        let run_at = task.run_at().unwrap_or(0) as i64;
+        let run_at = task.run_at().unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        }) as i64;
         let max_attempts = task.max_attempts().unwrap_or(25) as i64;
         let priority = task.priority().unwrap_or_default() as i64;
         let args = &task.args;
