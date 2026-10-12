@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- ci(deps): bump cargo-bins/cargo-binstall from 1.24.0 to 1.25.2 ([#118](https://github.com/apalis-dev/apalis-sqlite/pull/118))
 ## [1.0.0] - 2026-10-12
 
 - bump: to v1.0.0
