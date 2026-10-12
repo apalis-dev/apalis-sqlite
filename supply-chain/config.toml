@@ -16,15 +16,15 @@ version = "0.2.21"
 criteria = "safe-to-deploy"
 
 [[exemptions.apalis]]
-version = "1.0.0-rc.11"
+version = "1.0.0"
 criteria = "safe-to-run"
 
 [[exemptions.apalis-codec]]
-version = "0.1.0-rc.11"
+version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.apalis-core]]
-version = "1.0.0-rc.11"
+version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.apalis-sqlite]]
@@ -32,7 +32,7 @@ version = "1.0.0-rc.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.apalis-workflow]]
-version = "0.1.0-rc.11"
+version = "1.0.0"
 criteria = "safe-to-run"
 
 [[exemptions.async-channel]]
@@ -652,7 +652,7 @@ version = "1.0.229"
 criteria = "safe-to-deploy"
 
 [[exemptions.serde_json]]
-version = "1.0.151"
+version = "1.0.154"
 criteria = "safe-to-deploy"
 
 [[exemptions.sha1]]
@@ -684,7 +684,7 @@ version = "0.4.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
-version = "1.16.2"
+version = "1.16.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
@@ -740,7 +740,7 @@ version = "2.0.119"
 criteria = "safe-to-deploy"
 
 [[exemptions.syn]]
-version = "3.0.6"
+version = "3.0.8"
 criteria = "safe-to-deploy"
 
 [[exemptions.sync_wrapper]]
@@ -788,7 +788,7 @@ version = "0.1.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-util]]
-version = "0.7.19"
+version = "0.7.20"
 criteria = "safe-to-run"
 
 [[exemptions.tower]]
@@ -836,7 +836,7 @@ version = "0.3.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-ident]]
-version = "1.0.26"
+version = "1.0.27"
 criteria = "safe-to-deploy"
 
 [[exemptions.unicode-normalization]]
@@ -864,7 +864,7 @@ version = "1.0.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.27.0"
+version = "1.28.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.valuable]]
