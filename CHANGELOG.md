@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- deps(deps): bump tokio from 1.53.2 to 1.53.3 ([#119](https://github.com/apalis-dev/apalis-sqlite/pull/119))
 ## [1.0.0] - 2026-10-12
 
 - bump: to v1.0.0
