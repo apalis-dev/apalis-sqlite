@@ -548,4 +548,40 @@ mod tests {
             .build(workflow);
         worker.run().await.unwrap();
     }
+
+    #[tokio::test]
+    async fn list_queues_reports_stats() {
+        let url = std::env::var("DATABASE_URL").unwrap_or(":memory:".to_owned());
+        let pool = SqlitePool::connect(&url).await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+
+        let queue = format!("stats-{}", ulid::Ulid::generate());
+        let mut backend =
+            SqliteStorage::new(&pool).with_config(Config::default().queue(queue.clone()));
+
+        backend.push(42u32).await.unwrap();
+
+        let queues = backend.list_queues().await.unwrap();
+        let info = queues
+            .iter()
+            .find(|info| info.name == queue)
+            .expect("queue is listed");
+
+        let stat = |title: &str| {
+            info.stats
+                .iter()
+                .find(|stat| stat.title == title)
+                .unwrap_or_else(|| panic!("{title} is reported"))
+                .value
+                .clone()
+        };
+
+        assert_eq!(stat("TOTAL_JOBS"), "1");
+        assert_eq!(stat("PENDING_JOBS"), "1");
+        assert_eq!(stat("ACTIVE_JOBS"), "1");
+        assert_eq!(stat("DONE_JOBS"), "0");
+        assert_eq!(stat("JOBS_TODAY"), "1");
+        assert!(info.activity.iter().sum::<usize>() >= 1);
+        assert!(info.workers.is_empty());
+    }
 }
