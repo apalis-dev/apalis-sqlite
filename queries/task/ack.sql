@@ -13,7 +13,10 @@ SET
     status = j.status,
     attempts = j.attempt,
     last_result = j.result,
-    done_at = strftime('%s', 'now')
+    -- A deferred task goes back to Pending and must be unlocked to be fetched again.
+    lock_by = CASE WHEN j.status = 'Pending' THEN NULL ELSE lock_by END,
+    lock_at = CASE WHEN j.status = 'Pending' THEN NULL ELSE lock_at END,
+    done_at = CASE WHEN j.status = 'Pending' THEN NULL ELSE strftime('%s', 'now') END
 FROM
     j
 WHERE

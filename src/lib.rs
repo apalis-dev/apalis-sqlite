@@ -302,7 +302,10 @@ mod tests {
     use futures::{StreamExt, future::ready, stream};
     use serde::{Deserialize, Serialize};
     use sqlx::SqlitePool;
-    use std::time::{Duration, Instant};
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::{Duration, Instant},
+    };
 
     use super::*;
 
@@ -583,5 +586,30 @@ mod tests {
         assert_eq!(stat("JOBS_TODAY"), "1");
         assert!(info.activity.iter().sum::<usize>() >= 1);
         assert!(info.workers.is_empty());
+    }
+
+    #[tokio::test]
+    async fn deferred_task_runs_again() {
+        static RUNS: AtomicUsize = AtomicUsize::new(0);
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+        let mut backend = SqliteStorage::new(&pool);
+        backend.push(1usize).await.unwrap();
+
+        async fn defer_once(_: usize, wrk: WorkerContext) -> Result<(), BoxDynError> {
+            if RUNS.fetch_add(1, Ordering::SeqCst) == 0 {
+                return Err(DeferredError::new("not yet").into());
+            }
+            wrk.stop().unwrap();
+            Ok(())
+        }
+        let worker = WorkerBuilder::new("deferred")
+            .backend(backend)
+            .build(defer_once);
+        tokio::time::timeout(Duration::from_secs(10), worker.run())
+            .await
+            .expect("the deferred task never ran again")
+            .unwrap();
+        assert_eq!(RUNS.load(Ordering::SeqCst), 2);
     }
 }
