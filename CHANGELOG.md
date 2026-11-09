@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- deps(deps): bump log from 0.4.34 to 0.4.35 ([#123](https://github.com/apalis-dev/apalis-sqlite/pull/123))
 - perf: compute the queue statistics in a single pass over `Jobs` instead of 18 `UNION ALL` aggregate branches, and drop the per-queue correlated subqueries for the workers and the activity
 - perf: add `idx_jobs_status_type_recent` and `idx_jobs_status_recent` so listing recent tasks no longer sorts the whole table
 
