@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- chore: add auto-release and auto-changelog scripts ([#124](https://github.com/apalis-dev/apalis-sqlite/pull/124))
+- chore: add auto-changelog scripts ([#125](https://github.com/apalis-dev/apalis-sqlite/pull/125))
+- chore: add auto-release scripts ([#124](https://github.com/apalis-dev/apalis-sqlite/pull/124))
 - perf: compute the queue statistics in a single pass over `Jobs` instead of 18 `UNION ALL` aggregate branches, and drop the per-queue correlated subqueries for the workers and the activity ([#120](https://github.com/apalis-dev/apalis-sqlite/pull/120))
 - perf: add `idx_jobs_status_type_recent` and `idx_jobs_status_recent` so listing recent tasks no longer sorts the whole table ([#120](https://github.com/apalis-dev/apalis-sqlite/pull/120))
 
