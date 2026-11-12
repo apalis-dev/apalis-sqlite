@@ -3,7 +3,10 @@ exclude-unpublished = true
 
 [advisories]
 unmaintained = "none"
-ignore = []
+ignore = [
+    # TODO(geofmureithi): track sqlx & apalis-cron advisories and remove them from this list once they are fixed
+    "RUSTSEC-2026-0459"
+]
 
 [licenses]
 confidence-threshold = 0.8
@@ -35,7 +38,6 @@ skip-tree = [
     { name = "getrandom" },
     { name = "hashbrown" },
     { name = "rand" },
-    { name = "async-channel" },
     { name = "rand_core" },
     { name = "event-listener" },
     { name = "syn" },
