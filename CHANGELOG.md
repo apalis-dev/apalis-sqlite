@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- fix: `vacuum_before` only deletes tasks that finished before the cutoff. It compared the INTEGER `run_at` with a TEXT `datetime()`, which is true for every row ([#129](https://github.com/apalis-dev/apalis-sqlite/pull/129))
+
 ## [1.1.0](https://github.com/apalis-dev/apalis-sqlite/releases/tag/v1.1.0)
 
 - *ci(deps)*: bump cargo-bins/cargo-binstall from 1.24.0 to 1.26.2 ([#118](https://github.com/apalis-dev/apalis-sqlite/pull/118))
