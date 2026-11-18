@@ -9,8 +9,6 @@ WHERE
             AND max_attempts <= attempts
         )
     )
-    AND (
-        run_at < datetime('now', '-' || ?1 || ' seconds')
-    );
+    AND done_at <= strftime('%s', 'now') - ?1;
 
 VACUUM;

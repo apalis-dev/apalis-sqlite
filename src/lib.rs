@@ -584,4 +584,48 @@ mod tests {
         assert!(info.activity.iter().sum::<usize>() >= 1);
         assert!(info.workers.is_empty());
     }
+
+    #[tokio::test]
+    async fn vacuum_before_keeps_tasks_finished_after_the_cutoff() {
+        use apalis_core::backend::{TaskSink, Vacuum};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let url = std::env::var("DATABASE_URL").unwrap_or(":memory:".to_owned());
+        let pool = SqlitePool::connect(&url).await.unwrap();
+        SqliteStorage::setup(&pool).await.unwrap();
+
+        let queue = format!("vacuum-{}", ulid::Ulid::generate());
+        let mut backend =
+            SqliteStorage::new(&pool).with_config(Config::default().queue(queue.clone()));
+
+        const DAY: u64 = 24 * 60 * 60;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        for age in [DAY, 30 * DAY] {
+            backend
+                .push_task(TaskBuilder::new(42u32).run_at_timestamp(now - age).build())
+                .await
+                .unwrap();
+        }
+        sqlx::query("UPDATE Jobs SET status = 'Done', done_at = run_at + 5 WHERE job_type = ?1")
+            .bind(&queue)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        backend
+            .vacuum_before(Duration::from_secs(7 * DAY))
+            .await
+            .unwrap();
+
+        let left: Vec<i64> =
+            sqlx::query_scalar("SELECT done_at FROM Jobs WHERE job_type = ?1 ORDER BY done_at")
+                .bind(&queue)
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+        assert_eq!(left, vec![(now - DAY + 5) as i64]);
+    }
 }
