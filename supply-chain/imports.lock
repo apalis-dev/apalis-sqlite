@@ -44,3 +44,7 @@ audited_as = "1.0.0"
 [[unpublished.apalis-sqlite]]
 version = "1.1.1"
 audited_as = "1.1.0"
+
+[[unpublished.apalis-sqlite]]
+version = "1.2.0"
+audited_as = "1.1.1"
